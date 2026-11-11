@@ -122,6 +122,42 @@ fn maps_only_supported_image_types_to_extensions() {
     assert_eq!(image_extension("text/html"), None);
 }
 
+#[test]
+fn parses_netease_main_window_title() {
+    assert_eq!(
+        parse_netease_window_title("恋人 - 李荣浩"),
+        Some(("恋人".to_owned(), "李荣浩".to_owned()))
+    );
+    assert_eq!(parse_netease_window_title("桌面歌词"), None);
+}
+
+#[test]
+fn maps_netease_commands_to_renderer_control_points() {
+    assert_eq!(
+        netease_control_point(1_057, 752, APPCOMMAND_MEDIA_PREVIOUSTRACK),
+        (467, 709)
+    );
+    assert_eq!(
+        netease_control_point(1_057, 752, APPCOMMAND_MEDIA_PLAY_PAUSE),
+        (528, 709)
+    );
+    assert_eq!(
+        netease_control_point(1_057, 752, APPCOMMAND_MEDIA_NEXTTRACK),
+        (584, 709)
+    );
+}
+
+#[test]
+fn identifies_cloudmusic_audio_process_paths() {
+    assert!(is_cloudmusic_executable(
+        r"C:\Program Files\Netease\CloudMusic\cloudmusic.exe"
+    ));
+    assert!(is_cloudmusic_executable(r"D:\Apps\CloudMusic.EXE"));
+    assert!(!is_cloudmusic_executable(
+        r"C:\Program Files\Spotify\Spotify.exe"
+    ));
+}
+
 #[tokio::test]
 async fn mock_provider_never_advertises_unavailable_controls() {
     let provider = MockMediaProvider::from_sessions(vec![mock_session(

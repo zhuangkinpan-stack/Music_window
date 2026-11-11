@@ -72,5 +72,45 @@ pub fn point_inside(x: i32, y: i32, left: i32, top: i32, right: i32, bottom: i32
     x >= left && x < right && y >= top && y < bottom
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QuickBarZone {
+    Drag,
+    Previous,
+    PlayPause,
+    Next,
+    Locked,
+}
+
+pub fn classify_quick_bar_zone(x: i32, width: i32) -> QuickBarZone {
+    if width <= 0 {
+        return QuickBarZone::Drag;
+    }
+    match x.max(0) * 100 / width {
+        0..=54 => QuickBarZone::Drag,
+        55..=64 => QuickBarZone::Previous,
+        65..=77 => QuickBarZone::PlayPause,
+        78..=90 => QuickBarZone::Next,
+        _ => QuickBarZone::Locked,
+    }
+}
+
+pub fn dragged_origin(
+    start_window_x: i32,
+    start_window_y: i32,
+    start_cursor_x: i32,
+    start_cursor_y: i32,
+    cursor_x: i32,
+    cursor_y: i32,
+) -> (i32, i32) {
+    (
+        start_window_x + cursor_x - start_cursor_x,
+        start_window_y + cursor_y - start_cursor_y,
+    )
+}
+
+pub fn should_relock_after_hover(locked: bool, hovered: bool, hovered_since_unlock: bool) -> bool {
+    !locked && hovered_since_unlock && !hovered
+}
+
 #[cfg(test)]
 mod tests;

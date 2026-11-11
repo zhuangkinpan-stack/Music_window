@@ -14,6 +14,10 @@ use tokio::sync::OnceCell;
 
 use crate::contracts::{MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities};
 
+use super::netease::{
+    NeteaseClient, APPCOMMAND_MEDIA_NEXTTRACK, APPCOMMAND_MEDIA_PLAY_PAUSE,
+    APPCOMMAND_MEDIA_PREVIOUSTRACK, NET_EASE_SESSION_ID,
+};
 use super::{
     friendly_app_name, image_extension, ticks_to_millis, MediaProviderError, MediaSessionProvider,
 };
@@ -22,6 +26,7 @@ pub struct WindowsMediaProvider {
     manager: OnceCell<GlobalSystemMediaTransportControlsSessionManager>,
     artwork_cache: Mutex<HashMap<String, Option<String>>>,
     artwork_cache_dir: PathBuf,
+    netease: NeteaseClient,
 }
 
 impl WindowsMediaProvider {
@@ -30,6 +35,7 @@ impl WindowsMediaProvider {
             manager: OnceCell::new(),
             artwork_cache: Mutex::new(HashMap::new()),
             artwork_cache_dir,
+            netease: NeteaseClient::new(),
         }
     }
 
@@ -160,7 +166,14 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 #[async_trait]
 impl MediaSessionProvider for WindowsMediaProvider {
     async fn current_session_id(&self) -> Result<Option<String>, MediaProviderError> {
-        let manager = self.manager().await?;
+        if let Some(session_id) = self.netease.current_if_playing() {
+            return Ok(Some(session_id));
+        }
+        let manager = match self.manager().await {
+            Ok(manager) => manager,
+            Err(_) if self.netease.session().is_some() => return Ok(None),
+            Err(error) => return Err(error),
+        };
         Ok(manager
             .GetCurrentSession()
             .ok()
@@ -169,18 +182,29 @@ impl MediaSessionProvider for WindowsMediaProvider {
     }
 
     async fn sessions(&self) -> Result<Vec<MediaSessionSummary>, MediaProviderError> {
-        let manager = self.manager().await?;
-        let sessions = manager.GetSessions()?;
-        let mut result = Vec::with_capacity(sessions.Size()? as usize);
-        for index in 0..sessions.Size()? {
-            if let Ok(summary) = self.summarize(sessions.GetAt(index)?) {
-                result.push(summary);
+        let mut result = Vec::new();
+        let manager_result = self.manager().await;
+        if let Ok(manager) = manager_result {
+            let sessions = manager.GetSessions()?;
+            result.reserve(sessions.Size()? as usize + 1);
+            for index in 0..sessions.Size()? {
+                if let Ok(summary) = self.summarize(sessions.GetAt(index)?) {
+                    result.push(summary);
+                }
             }
+        }
+        if let Some(session) = self.netease.session() {
+            result.push(session);
+        } else {
+            manager_result?;
         }
         Ok(result)
     }
 
     async fn playback_state(&self, session_id: &str) -> Result<PlaybackState, MediaProviderError> {
+        if session_id == NET_EASE_SESSION_ID {
+            return self.netease.playback_state(session_id);
+        }
         let session = self.find_session(session_id).await?;
         let timeline = session.GetTimelineProperties()?;
         let playback = session.GetPlaybackInfo()?;
@@ -197,6 +221,11 @@ impl MediaSessionProvider for WindowsMediaProvider {
     }
 
     async fn toggle_play_pause(&self, session_id: &str) -> Result<bool, MediaProviderError> {
+        if session_id == NET_EASE_SESSION_ID {
+            return self
+                .netease
+                .send_command(session_id, APPCOMMAND_MEDIA_PLAY_PAUSE);
+        }
         Ok(self
             .find_session(session_id)
             .await?
@@ -205,6 +234,11 @@ impl MediaSessionProvider for WindowsMediaProvider {
     }
 
     async fn next_track(&self, session_id: &str) -> Result<bool, MediaProviderError> {
+        if session_id == NET_EASE_SESSION_ID {
+            return self
+                .netease
+                .send_command(session_id, APPCOMMAND_MEDIA_NEXTTRACK);
+        }
         Ok(self
             .find_session(session_id)
             .await?
@@ -213,6 +247,11 @@ impl MediaSessionProvider for WindowsMediaProvider {
     }
 
     async fn previous_track(&self, session_id: &str) -> Result<bool, MediaProviderError> {
+        if session_id == NET_EASE_SESSION_ID {
+            return self
+                .netease
+                .send_command(session_id, APPCOMMAND_MEDIA_PREVIOUSTRACK);
+        }
         Ok(self
             .find_session(session_id)
             .await?
@@ -221,6 +260,9 @@ impl MediaSessionProvider for WindowsMediaProvider {
     }
 
     async fn seek(&self, session_id: &str, position_ms: i64) -> Result<bool, MediaProviderError> {
+        if session_id == NET_EASE_SESSION_ID {
+            return Ok(false);
+        }
         Ok(self
             .find_session(session_id)
             .await?

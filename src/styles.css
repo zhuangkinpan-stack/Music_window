@@ -841,6 +841,10 @@ kbd {
   gap: 1px;
 }
 
+.quick-window .quick-controls {
+  pointer-events: none;
+}
+
 .quick-controls button {
   display: grid;
   width: 27px;

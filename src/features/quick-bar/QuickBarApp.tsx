@@ -117,21 +117,22 @@ export function QuickBarApp() {
       return;
     }
     let active = true;
+    let stateEventReceived = false;
     const cleanups: Array<() => void> = [];
-    void getQuickBarLockState().then((locked) => {
+    void listenQuickBarLockState((locked) => {
+      stateEventReceived = true;
+      interaction.setLocked(locked);
+    }).then(async (cleanup) => {
       if (active) {
-        interaction.setLocked(locked);
+        cleanups.push(cleanup);
+        const locked = await getQuickBarLockState();
+        if (active && !stateEventReceived) {
+          interaction.setLocked(locked);
+        }
+      } else {
+        cleanup();
       }
     });
-    void listenQuickBarLockState((locked) => interaction.setLocked(locked)).then(
-      (cleanup) => {
-        if (active) {
-          cleanups.push(cleanup);
-        } else {
-          cleanup();
-        }
-      },
-    );
     void listenQuickBarHover(setHovered).then((cleanup) => {
       if (active) {
         cleanups.push(cleanup);
@@ -215,13 +216,6 @@ export function QuickBarApp() {
     session?.title,
     setLyrics,
   ]);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) {
-      return;
-    }
-    void setQuickBarLocked(interaction.locked);
-  }, [interaction.locked]);
 
   const interact = () => {
     if (!interaction.locked) {
