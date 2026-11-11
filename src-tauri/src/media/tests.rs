@@ -18,6 +18,23 @@ async fn coordinator_uses_current_session_when_selection_is_empty() {
     );
 }
 
+#[tokio::test]
+async fn coordinator_exposes_manual_selection_in_snapshot() {
+    let provider = MockMediaProvider::from_sessions(vec![
+        mock_session("spotify.exe", SessionCapabilities::default()),
+        mock_session("cloudmusic.exe", SessionCapabilities::default()),
+    ]);
+    let coordinator = MediaCoordinator::new(std::sync::Arc::new(provider));
+    coordinator.select_session("cloudmusic.exe").await.unwrap();
+
+    let snapshot = coordinator.snapshot().await;
+
+    assert_eq!(
+        snapshot.selected_session_id.as_deref(),
+        Some("cloudmusic.exe")
+    );
+}
+
 struct FailingProvider;
 
 #[async_trait::async_trait]
@@ -99,12 +116,10 @@ fn converts_windows_time_ticks_to_milliseconds() {
 }
 
 #[test]
-fn builds_data_uri_only_for_supported_image_types() {
-    assert_eq!(
-        image_data_uri("image/png", b"abc").as_deref(),
-        Some("data:image/png;base64,YWJj")
-    );
-    assert!(image_data_uri("text/html", b"abc").is_none());
+fn maps_only_supported_image_types_to_extensions() {
+    assert_eq!(image_extension("image/png"), Some("png"));
+    assert_eq!(image_extension("image/jpeg"), Some("jpg"));
+    assert_eq!(image_extension("text/html"), None);
 }
 
 #[tokio::test]

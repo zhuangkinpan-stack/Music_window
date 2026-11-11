@@ -4,32 +4,33 @@ use ::windows::Media::Control::{
 };
 use ::windows::Storage::Streams::DataReader;
 use async_trait::async_trait;
-use std::{collections::HashMap, sync::Mutex};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 use tokio::sync::OnceCell;
 
 use crate::contracts::{MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities};
 
 use super::{
-    friendly_app_name, image_data_uri, ticks_to_millis, MediaProviderError, MediaSessionProvider,
+    friendly_app_name, image_extension, ticks_to_millis, MediaProviderError, MediaSessionProvider,
 };
 
 pub struct WindowsMediaProvider {
     manager: OnceCell<GlobalSystemMediaTransportControlsSessionManager>,
     artwork_cache: Mutex<HashMap<String, Option<String>>>,
-}
-
-impl Default for WindowsMediaProvider {
-    fn default() -> Self {
-        Self {
-            manager: OnceCell::new(),
-            artwork_cache: Mutex::new(HashMap::new()),
-        }
-    }
+    artwork_cache_dir: PathBuf,
 }
 
 impl WindowsMediaProvider {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(artwork_cache_dir: PathBuf) -> Self {
+        Self {
+            manager: OnceCell::new(),
+            artwork_cache: Mutex::new(HashMap::new()),
+            artwork_cache_dir,
+        }
     }
 
     async fn manager(
@@ -119,16 +120,41 @@ impl WindowsMediaProvider {
                 let reader = DataReader::CreateDataReader(&input).ok()?;
                 reader.LoadAsync(size as u32).ok()?.get().ok()?;
                 let length = reader.UnconsumedBufferLength().ok()? as usize;
+                let extension = image_extension(&mime)?;
                 let mut bytes = vec![0; length];
                 reader.ReadBytes(&mut bytes).ok()?;
-                image_data_uri(&mime, &bytes)
+                self.cache_artwork(&key, extension, &bytes).ok()
             });
-        self.artwork_cache
-            .lock()
-            .expect("artwork cache poisoned")
-            .insert(key, artwork.clone());
+        let mut cache = self.artwork_cache.lock().expect("artwork cache poisoned");
+        if cache.len() >= 16 {
+            cache.clear();
+        }
+        cache.insert(key, artwork.clone());
         Ok(artwork)
     }
+
+    fn cache_artwork(&self, key: &str, extension: &str, bytes: &[u8]) -> std::io::Result<String> {
+        std::fs::create_dir_all(&self.artwork_cache_dir)?;
+        let digest = Sha256::digest(key.as_bytes());
+        let filename = format!(
+            "{}.{}",
+            digest
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>(),
+            extension
+        );
+        let path = self.artwork_cache_dir.join(filename);
+        write_if_changed(&path, bytes)?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+}
+
+fn write_if_changed(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if std::fs::read(path).is_ok_and(|existing| existing == bytes) {
+        return Ok(());
+    }
+    std::fs::write(path, bytes)
 }
 
 #[async_trait]

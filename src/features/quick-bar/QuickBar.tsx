@@ -13,6 +13,7 @@ import type {
   MediaSessionSummary,
   PlaybackState,
 } from "../../contracts";
+import { artworkSource } from "../../lib/mediaApi";
 
 interface QuickBarProps {
   session: MediaSessionSummary;
@@ -41,6 +42,7 @@ export function QuickBar({
 }: QuickBarProps) {
   const lyric = currentLyric(lyrics, positionMs);
   const playing = playback.playbackStatus === "playing";
+  const artwork = artworkSource(session.artworkUrl);
 
   return (
     <section
@@ -52,8 +54,8 @@ export function QuickBar({
       onPointerMove={onInteract}
     >
       <div className="quick-art" data-tauri-drag-region>
-        {session.artworkUrl ? (
-          <img src={session.artworkUrl} alt="" />
+        {artwork ? (
+          <img src={artwork} alt="" />
         ) : (
           <Music2 size={17} aria-hidden="true" />
         )}

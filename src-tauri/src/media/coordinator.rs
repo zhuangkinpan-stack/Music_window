@@ -25,6 +25,7 @@ impl MediaCoordinator {
             Err(error) => {
                 return MediaSnapshot {
                     current_session_id: None,
+                    selected_session_id: None,
                     sessions: Vec::new(),
                     playback: None,
                     diagnostic: Some(error_to_diagnostic(&error)),
@@ -52,13 +53,16 @@ impl MediaCoordinator {
                 });
         }
 
-        let playback = match selected.as_deref() {
+        let selected_session_id = selected.clone();
+        drop(selected);
+        let playback = match selected_session_id.as_deref() {
             Some(id) => self.playback_state(id).await,
             None => None,
         };
 
         MediaSnapshot {
             current_session_id,
+            selected_session_id,
             sessions,
             playback,
             diagnostic: None,
@@ -122,6 +126,7 @@ impl MediaCoordinator {
         };
         MediaSnapshot {
             current_session_id: self.provider.current_session_id().await.ok().flatten(),
+            selected_session_id: selected,
             sessions,
             playback,
             diagnostic: None,

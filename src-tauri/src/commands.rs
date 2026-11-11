@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tauri::State;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::contracts::{AppSettings, WindowPosition};
@@ -183,6 +183,7 @@ pub fn update_settings(
     state: State<'_, AppState>,
 ) -> Result<AppSettings, String> {
     let previous = state.settings.get();
+    let settings = crate::settings::merge_settings(previous.clone(), settings);
     crate::settings::validate_settings(&settings).map_err(|error| error.to_string())?;
     let shortcuts_changed = settings.unlock_shortcut != previous.unlock_shortcut
         || settings.toggle_quick_bar_shortcut != previous.toggle_quick_bar_shortcut;
@@ -198,6 +199,14 @@ pub fn update_settings(
         }
         return Err(error.to_string());
     }
+    if let Some(window) = app.get_webview_window("quick") {
+        crate::quick_bar::apply_geometry(
+            &window,
+            settings.quick_bar_width_cm,
+            settings.quick_bar_position.as_ref(),
+        )?;
+    }
+    let _ = app.emit("settings://changed", &settings);
     if settings.start_with_windows {
         app.autolaunch()
             .enable()
@@ -206,13 +215,6 @@ pub fn update_settings(
         app.autolaunch()
             .disable()
             .map_err(|error| error.to_string())?;
-    }
-    if let Some(window) = app.get_webview_window("quick") {
-        crate::quick_bar::apply_geometry(
-            &window,
-            settings.quick_bar_width_cm,
-            settings.quick_bar_position.as_ref(),
-        )?;
     }
     Ok(settings)
 }

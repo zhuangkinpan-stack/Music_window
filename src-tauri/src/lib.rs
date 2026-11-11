@@ -2,6 +2,7 @@ mod commands;
 mod contracts;
 mod lyrics;
 mod media;
+mod media_events;
 mod quick_bar;
 mod settings;
 mod shortcuts;
@@ -27,12 +28,14 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            let media = Arc::new(MediaCoordinator::new(Arc::new(WindowsMediaProvider::new())));
-            let cache_dir = app
+            let app_cache_dir = app
                 .path()
                 .app_cache_dir()
-                .map_err(|error| error.to_string())?
-                .join("lyrics");
+                .map_err(|error| error.to_string())?;
+            let media = Arc::new(MediaCoordinator::new(Arc::new(WindowsMediaProvider::new(
+                app_cache_dir.join("artwork"),
+            ))));
+            let cache_dir = app_cache_dir.join("lyrics");
             let lyrics = Arc::new(LyricsService::new(
                 Arc::new(LrclibFetcher::new().map_err(|error| error.to_string())?),
                 LyricsCache::new(cache_dir),
@@ -47,6 +50,7 @@ pub fn run() {
                 Arc::new(SettingsService::load(settings_path).map_err(|error| error.to_string())?);
             let initial_settings = settings.get();
             app.manage(AppState::new(media, lyrics, interaction.clone(), settings));
+            media_events::start(app.handle().clone());
             tray::build(app)?;
 
             if let Some(main_window) = app.get_webview_window("main") {

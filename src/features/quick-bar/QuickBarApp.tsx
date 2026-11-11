@@ -10,6 +10,8 @@ import {
   isTauriRuntime,
   listenQuickBarHover,
   listenQuickBarLockState,
+  listenSettingsChanged,
+  listenMediaSnapshot,
   listSessions,
   loadLyrics,
   nextTrack,
@@ -61,6 +63,24 @@ export function QuickBarApp() {
         );
       })
       .catch(() => undefined);
+    let active = true;
+    let cleanup: (() => void) | undefined;
+    void listenSettingsChanged((settings) => {
+      document.documentElement.dataset.theme = settings.theme;
+      document.documentElement.dataset.reduceTransparency = String(
+        settings.reduceTransparency,
+      );
+    }).then((unlisten) => {
+      if (active) {
+        cleanup = unlisten;
+      } else {
+        unlisten();
+      }
+    });
+    return () => {
+      active = false;
+      cleanup?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -68,6 +88,11 @@ export function QuickBarApp() {
       return;
     }
     let active = true;
+    const cleanupPromise = listenMediaSnapshot((snapshot) => {
+      if (active) {
+        replaceSnapshot(snapshot);
+      }
+    });
     const refresh = async () => {
       try {
         const snapshot = await listSessions();
@@ -79,10 +104,11 @@ export function QuickBarApp() {
       }
     };
     void refresh();
-    const interval = window.setInterval(refresh, 1_000);
+    const interval = window.setInterval(refresh, 5_000);
     return () => {
       active = false;
       window.clearInterval(interval);
+      void cleanupPromise.then((cleanup) => cleanup());
     };
   }, [replaceSnapshot]);
 

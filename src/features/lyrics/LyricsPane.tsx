@@ -1,4 +1,5 @@
 import { FileMusic, LoaderCircle, RotateCcw } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import type { LyricsState } from "../../contracts";
 
@@ -15,9 +16,23 @@ export function LyricsPane({
   onRetry,
   onImport,
 }: LyricsPaneProps) {
-  if (lyrics.status === "ready" && lyrics.lines.length > 0) {
-    const currentIndex = findCurrentLyricIndex(lyrics.lines, positionMs);
+  const activeLineRef = useRef<HTMLParagraphElement | null>(null);
+  const currentIndex =
+    lyrics.status === "ready"
+      ? findCurrentLyricIndex(lyrics.lines, positionMs)
+      : -1;
 
+  useEffect(() => {
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    activeLineRef.current?.scrollIntoView({
+      block: "center",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [currentIndex]);
+
+  if (lyrics.status === "ready" && lyrics.lines.length > 0) {
     return (
       <section className="lyrics-pane" aria-label="同步歌词">
         <p className="section-kicker">
@@ -30,6 +45,7 @@ export function LyricsPane({
             return (
               <p
                 key={`${line.timeMs}-${index}`}
+                ref={current ? activeLineRef : undefined}
                 className="lyric-line"
                 data-active={current}
                 data-distance={Math.min(distance, 3)}

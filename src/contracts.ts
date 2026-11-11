@@ -39,6 +39,7 @@ export interface MediaDiagnostic {
 
 export interface MediaSnapshot {
   currentSessionId: string | null;
+  selectedSessionId: string | null;
   sessions: MediaSessionSummary[];
   playback: PlaybackState | null;
   diagnostic: MediaDiagnostic | null;

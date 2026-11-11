@@ -74,6 +74,16 @@ pub fn validate_settings(settings: &AppSettings) -> Result<(), SettingsError> {
     Ok(())
 }
 
+pub fn merge_settings(mut current: AppSettings, incoming: AppSettings) -> AppSettings {
+    if incoming.quick_bar_position.is_some() {
+        current.quick_bar_position = incoming.quick_bar_position;
+    }
+    AppSettings {
+        quick_bar_position: current.quick_bar_position,
+        ..incoming
+    }
+}
+
 fn load_settings(path: &Path) -> AppSettings {
     fs::read(path)
         .ok()

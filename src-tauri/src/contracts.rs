@@ -55,6 +55,7 @@ pub struct MediaDiagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct MediaSnapshot {
     pub current_session_id: Option<String>,
+    pub selected_session_id: Option<String>,
     pub sessions: Vec<MediaSessionSummary>,
     pub playback: Option<PlaybackState>,
     pub diagnostic: Option<MediaDiagnostic>,

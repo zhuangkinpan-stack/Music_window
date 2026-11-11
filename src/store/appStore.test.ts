@@ -6,6 +6,7 @@ import { applyMediaSnapshot, createInitialAppState } from "./appStore";
 function playingSnapshot(sessionId: string): MediaSnapshot {
   return {
     currentSessionId: sessionId,
+    selectedSessionId: sessionId,
     sessions: [
       {
         id: sessionId,
@@ -50,6 +51,7 @@ describe("applyMediaSnapshot", () => {
     );
     const empty = applyMediaSnapshot(playing, {
       currentSessionId: null,
+      selectedSessionId: null,
       sessions: [],
       playback: null,
       diagnostic: null,
@@ -57,6 +59,21 @@ describe("applyMediaSnapshot", () => {
 
     expect(empty.selectedSessionId).toBeNull();
     expect(empty.playback).toBeNull();
+  });
+
+  it("respects the backend selected session over the Windows current session", () => {
+    const snapshot = playingSnapshot("cloudmusic.exe");
+    snapshot.currentSessionId = "spotify.exe";
+    snapshot.selectedSessionId = "cloudmusic.exe";
+    snapshot.sessions.push({
+      ...snapshot.sessions[0],
+      id: "spotify.exe",
+      appName: "Spotify",
+    });
+
+    const next = applyMediaSnapshot(createInitialAppState(), snapshot);
+
+    expect(next.selectedSessionId).toBe("cloudmusic.exe");
   });
 });
 

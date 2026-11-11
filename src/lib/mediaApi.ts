@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -14,8 +14,26 @@ export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+export function artworkSource(url: string | null): string | null {
+  if (!url) {
+    return null;
+  }
+  if (/^(data:|https?:|asset:)/i.test(url)) {
+    return url;
+  }
+  return convertFileSrc(url);
+}
+
 export async function listSessions(): Promise<MediaSnapshot> {
   return invoke<MediaSnapshot>("list_sessions");
+}
+
+export function listenMediaSnapshot(
+  handler: (snapshot: MediaSnapshot) => void,
+): Promise<() => void> {
+  return listen<MediaSnapshot>("media://snapshot", (event) =>
+    handler(event.payload),
+  );
 }
 
 export async function selectSession(
@@ -119,6 +137,14 @@ export function listenQuickBarHover(
   handler: (hovered: boolean) => void,
 ): Promise<() => void> {
   return listen<boolean>("quickbar://hover-state", (event) =>
+    handler(event.payload),
+  );
+}
+
+export function listenSettingsChanged(
+  handler: (settings: AppSettings) => void,
+): Promise<() => void> {
+  return listen<AppSettings>("settings://changed", (event) =>
     handler(event.payload),
   );
 }

@@ -65,7 +65,7 @@ export function applyMediaSnapshot(
   const selectedSessionId = chooseSession(
     state,
     snapshot.sessions,
-    snapshot.currentSessionId,
+    snapshot.selectedSessionId ?? snapshot.currentSessionId,
   );
 
   return {

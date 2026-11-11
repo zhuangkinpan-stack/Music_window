@@ -69,3 +69,30 @@ fn rejects_invalid_or_duplicate_shortcuts() {
 
     assert!(validate_settings(&settings).is_err());
 }
+
+#[test]
+fn settings_update_preserves_position_saved_by_quick_bar() {
+    let current = AppSettings {
+        quick_bar_position: Some(crate::contracts::WindowPosition {
+            x: 300,
+            y: 850,
+            monitor: None,
+        }),
+        ..Default::default()
+    };
+    let incoming = AppSettings {
+        theme: "light".to_owned(),
+        ..Default::default()
+    };
+
+    let merged = merge_settings(current, incoming);
+
+    assert_eq!(merged.theme, "light");
+    assert_eq!(
+        merged
+            .quick_bar_position
+            .as_ref()
+            .map(|position| (position.x, position.y)),
+        Some((300, 850))
+    );
+}

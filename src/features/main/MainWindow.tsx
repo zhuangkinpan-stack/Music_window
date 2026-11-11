@@ -8,6 +8,7 @@ import {
 
 import type { AppState, MediaSessionSummary } from "../../contracts";
 import { formatTime } from "../../lib/formatTime";
+import { artworkSource } from "../../lib/mediaApi";
 import { LyricsPane } from "../lyrics/LyricsPane";
 import { PlaybackControls } from "../player/PlaybackControls";
 import { SessionSwitcher } from "../sessions/SessionSwitcher";
@@ -183,11 +184,12 @@ function NowPlaying({
 }
 
 function Artwork({ session }: { session: MediaSessionSummary }) {
-  if (session.artworkUrl) {
+  const source = artworkSource(session.artworkUrl);
+  if (source) {
     return (
       <img
         className="album-art"
-        src={session.artworkUrl}
+        src={source}
         alt={`${session.title} 专辑封面`}
       />
     );

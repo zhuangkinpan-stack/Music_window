@@ -13,6 +13,7 @@ import {
   getSettings,
   isTauriRuntime,
   listSessions,
+  listenMediaSnapshot,
   loadLyrics,
   minimizeMainWindow,
   nextTrack,
@@ -117,6 +118,11 @@ export default function App() {
       return;
     }
     let active = true;
+    const cleanupPromise = listenMediaSnapshot((snapshot) => {
+      if (active) {
+        replaceSnapshot(snapshot);
+      }
+    });
     const refresh = async () => {
       try {
         const snapshot = await listSessions();
@@ -134,10 +140,11 @@ export default function App() {
       }
     };
     void refresh();
-    const interval = window.setInterval(refresh, 1_500);
+    const interval = window.setInterval(refresh, 5_000);
     return () => {
       active = false;
       window.clearInterval(interval);
+      void cleanupPromise.then((cleanup) => cleanup());
     };
   }, [replaceSnapshot, setDiagnostic]);
 
