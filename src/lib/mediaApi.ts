@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type {
@@ -66,4 +67,37 @@ export async function minimizeMainWindow(): Promise<void> {
 export async function hideMainWindow(): Promise<void> {
   await getCurrentWindow().hide();
 }
+
+export async function getQuickBarLockState(): Promise<boolean> {
+  return invoke<boolean>("quick_bar_lock_state");
+}
+
+export async function setQuickBarLocked(locked: boolean): Promise<boolean> {
+  return invoke<boolean>("set_quick_bar_locked", { locked });
+}
+
+export async function touchQuickBar(): Promise<void> {
+  await invoke("touch_quick_bar");
+}
+
+export async function toggleQuickBar(): Promise<boolean> {
+  return invoke<boolean>("toggle_quick_bar");
+}
+
+export function listenQuickBarLockState(
+  handler: (locked: boolean) => void,
+): Promise<() => void> {
+  return listen<boolean>("quickbar://lock-state", (event) =>
+    handler(event.payload),
+  );
+}
+
+export function listenQuickBarHover(
+  handler: (hovered: boolean) => void,
+): Promise<() => void> {
+  return listen<boolean>("quickbar://hover-state", (event) =>
+    handler(event.payload),
+  );
+}
+
 

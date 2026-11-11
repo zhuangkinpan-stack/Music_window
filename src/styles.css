@@ -117,7 +117,7 @@ button:disabled {
   overflow: hidden;
   background:
     linear-gradient(145deg, rgb(255 255 255 / 7%), transparent 42%),
-    color-mix(in srgb, var(--app-bg) 84%, transparent);
+    color-mix(in srgb, var(--app-bg) 66%, transparent);
   box-shadow: var(--shadow);
   backdrop-filter: blur(30px) saturate(1.18);
 }
@@ -717,6 +717,150 @@ kbd {
 
 .spin {
   animation: spin 1s linear infinite;
+}
+
+.quick-window,
+.quick-window #root {
+  background: transparent;
+}
+
+.quick-bar {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto 12px;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 7px;
+  padding: 5px 7px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 17%);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 14%), transparent 44%),
+    rgb(8 12 20 / 82%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 10px 28px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(20px) saturate(1.2);
+  user-select: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.quick-bar[data-hovered="true"] {
+  border-color: rgb(186 230 253 / 48%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 24%),
+    0 0 0 1px rgb(125 211 252 / 10%),
+    0 10px 30px rgb(0 0 0 / 38%);
+}
+
+.quick-bar[data-locked="false"] {
+  border-color: rgb(103 232 165 / 42%);
+}
+
+.quick-art {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 10px;
+  color: #bae6fd;
+  background:
+    radial-gradient(circle at 28% 22%, rgb(125 211 252 / 44%), transparent 50%),
+    linear-gradient(145deg, #19304f, #171225);
+}
+
+.quick-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.quick-copy {
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.quick-copy p,
+.quick-copy span {
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-copy p {
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.quick-copy span {
+  margin-top: 3px;
+  color: #a8b3c3;
+  font-size: 10px;
+}
+
+.quick-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.quick-controls button {
+  display: grid;
+  width: 27px;
+  height: 29px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #d7e2ef;
+  background: transparent;
+}
+
+.quick-controls button:hover {
+  color: white;
+  background: rgb(255 255 255 / 10%);
+}
+
+.quick-controls button:nth-child(2) {
+  color: #06101d;
+  background: #e0f2fe;
+}
+
+.quick-lock {
+  display: grid;
+  width: 12px;
+  height: 100%;
+  place-items: center;
+  color: #9fb1c5;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.quick-bar[data-hovered="true"] .quick-lock,
+.quick-bar[data-locked="false"] .quick-lock {
+  opacity: 1;
+}
+
+.quick-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: #a8b3c3;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 14px;
+  background: rgb(8 12 20 / 76%);
+  backdrop-filter: blur(18px);
+  font-size: 11px;
 }
 
 @keyframes spin {
