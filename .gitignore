@@ -1,0 +1,14 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+.superpowers/
+.scratch/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+coverage/
+test-results/
+playwright-report/
+
