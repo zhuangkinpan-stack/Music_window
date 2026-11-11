@@ -1,0 +1,185 @@
+use async_trait::async_trait;
+use tokio::sync::OnceCell;
+use ::windows::Media::Control::{
+    GlobalSystemMediaTransportControlsSession,
+    GlobalSystemMediaTransportControlsSessionManager,
+    GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+};
+
+use crate::contracts::{
+    MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities,
+};
+
+use super::{
+    friendly_app_name, ticks_to_millis, MediaProviderError, MediaSessionProvider,
+};
+
+pub struct WindowsMediaProvider {
+    manager: OnceCell<GlobalSystemMediaTransportControlsSessionManager>,
+}
+
+impl Default for WindowsMediaProvider {
+    fn default() -> Self {
+        Self {
+            manager: OnceCell::new(),
+        }
+    }
+}
+
+impl WindowsMediaProvider {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    async fn manager(
+        &self,
+    ) -> Result<&GlobalSystemMediaTransportControlsSessionManager, MediaProviderError> {
+        self.manager
+            .get_or_try_init(|| async {
+                GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?
+                    .get()
+                    .map_err(Into::into)
+            })
+            .await
+    }
+
+    async fn find_session(
+        &self,
+        session_id: &str,
+    ) -> Result<GlobalSystemMediaTransportControlsSession, MediaProviderError> {
+        let manager = self.manager().await?;
+        let sessions = manager.GetSessions()?;
+        for index in 0..sessions.Size()? {
+            let session = sessions.GetAt(index)?;
+            let source = session.SourceAppUserModelId()?.to_string();
+            if source == session_id {
+                return Ok(session);
+            }
+        }
+        Err(MediaProviderError::SessionNotFound(session_id.to_owned()))
+    }
+
+    fn summarize(
+        session: GlobalSystemMediaTransportControlsSession,
+    ) -> Result<MediaSessionSummary, MediaProviderError> {
+        let id = session.SourceAppUserModelId()?.to_string();
+        let properties = session.TryGetMediaPropertiesAsync()?.get()?;
+        let playback = session.GetPlaybackInfo()?;
+        let controls = playback.Controls()?;
+
+        Ok(MediaSessionSummary {
+            app_name: friendly_app_name(&id),
+            id,
+            title: properties.Title().unwrap_or_default().to_string(),
+            artist: properties.Artist().unwrap_or_default().to_string(),
+            album: properties.AlbumTitle().unwrap_or_default().to_string(),
+            artwork_url: None,
+            playback_status: map_playback_status(playback.PlaybackStatus()?),
+            capabilities: SessionCapabilities {
+                play_pause: controls.IsPlayPauseToggleEnabled().unwrap_or(false),
+                next: controls.IsNextEnabled().unwrap_or(false),
+                previous: controls.IsPreviousEnabled().unwrap_or(false),
+                seek: controls.IsPlaybackPositionEnabled().unwrap_or(false),
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl MediaSessionProvider for WindowsMediaProvider {
+    async fn current_session_id(
+        &self,
+    ) -> Result<Option<String>, MediaProviderError> {
+        let manager = self.manager().await?;
+        Ok(manager
+            .GetCurrentSession()
+            .ok()
+            .and_then(|session| session.SourceAppUserModelId().ok())
+            .map(|id| id.to_string()))
+    }
+
+    async fn sessions(&self) -> Result<Vec<MediaSessionSummary>, MediaProviderError> {
+        let manager = self.manager().await?;
+        let sessions = manager.GetSessions()?;
+        let mut result = Vec::with_capacity(sessions.Size()? as usize);
+        for index in 0..sessions.Size()? {
+            if let Ok(summary) = Self::summarize(sessions.GetAt(index)?) {
+                result.push(summary);
+            }
+        }
+        Ok(result)
+    }
+
+    async fn playback_state(
+        &self,
+        session_id: &str,
+    ) -> Result<PlaybackState, MediaProviderError> {
+        let session = self.find_session(session_id).await?;
+        let timeline = session.GetTimelineProperties()?;
+        let playback = session.GetPlaybackInfo()?;
+        let start = timeline.StartTime()?.Duration;
+        let end = timeline.EndTime()?.Duration;
+        let position = timeline.Position()?.Duration;
+
+        Ok(PlaybackState {
+            session_id: session_id.to_owned(),
+            playback_status: map_playback_status(playback.PlaybackStatus()?),
+            position_ms: ticks_to_millis(position.saturating_sub(start)),
+            duration_ms: ticks_to_millis(end.saturating_sub(start)),
+        })
+    }
+
+    async fn toggle_play_pause(
+        &self,
+        session_id: &str,
+    ) -> Result<bool, MediaProviderError> {
+        Ok(self
+            .find_session(session_id)
+            .await?
+            .TryTogglePlayPauseAsync()?
+            .get()?)
+    }
+
+    async fn next_track(&self, session_id: &str) -> Result<bool, MediaProviderError> {
+        Ok(self.find_session(session_id).await?.TrySkipNextAsync()?.get()?)
+    }
+
+    async fn previous_track(
+        &self,
+        session_id: &str,
+    ) -> Result<bool, MediaProviderError> {
+        Ok(self
+            .find_session(session_id)
+            .await?
+            .TrySkipPreviousAsync()?
+            .get()?)
+    }
+
+    async fn seek(&self, session_id: &str, position_ms: i64) -> Result<bool, MediaProviderError> {
+        Ok(self
+            .find_session(session_id)
+            .await?
+            .TryChangePlaybackPositionAsync(position_ms.max(0).saturating_mul(10_000))?
+            .get()?)
+    }
+}
+
+fn map_playback_status(
+    status: GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+) -> PlaybackStatus {
+    match status {
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Opened => PlaybackStatus::Opened,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Changing => {
+            PlaybackStatus::Changing
+        }
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Stopped => {
+            PlaybackStatus::Stopped
+        }
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing => {
+            PlaybackStatus::Playing
+        }
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused => PlaybackStatus::Paused,
+        _ => PlaybackStatus::Closed,
+    }
+}
+
