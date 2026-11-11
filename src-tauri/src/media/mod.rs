@@ -1,11 +1,12 @@
 mod coordinator;
+#[cfg(test)]
 mod mock;
 mod session_provider;
 mod windows;
 
 use thiserror::Error;
 
-#[allow(unused_imports)]
+#[cfg(test)]
 pub use mock::MockMediaProvider;
 pub use session_provider::MediaSessionProvider;
 #[allow(unused_imports)]

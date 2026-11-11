@@ -3,17 +3,19 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::{
-    contracts::MediaSnapshot,
+    contracts::{LyricsState, MediaSnapshot},
+    lyrics::{LyricsService, TrackQuery},
     media::{MediaCoordinator, MediaProviderError},
 };
 
 pub struct AppState {
     pub media: Arc<MediaCoordinator>,
+    pub lyrics: Arc<LyricsService>,
 }
 
 impl AppState {
-    pub fn new(media: Arc<MediaCoordinator>) -> Self {
-        Self { media }
+    pub fn new(media: Arc<MediaCoordinator>, lyrics: Arc<LyricsService>) -> Self {
+        Self { media, lyrics }
     }
 }
 
@@ -81,6 +83,29 @@ pub async fn seek(
         .seek(&session_id, position_ms)
         .await
         .map_err(error_message)
+}
+
+#[tauri::command]
+pub async fn load_lyrics(
+    title: String,
+    artist: String,
+    album: String,
+    duration_ms: i64,
+    manual_lrc: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<LyricsState, String> {
+    Ok(state
+        .lyrics
+        .load(
+            &TrackQuery {
+                title,
+                artist,
+                album,
+                duration_ms,
+            },
+            manual_lrc.as_deref(),
+        )
+        .await)
 }
 
 fn error_message(error: MediaProviderError) -> String {
