@@ -75,6 +75,17 @@ export interface AppSettings {
   toggleQuickBarShortcut: string;
 }
 
+export const defaultAppSettings: AppSettings = {
+  theme: "dark",
+  quickBarWidthCm: 6.5,
+  quickBarPosition: null,
+  showQuickBarOnLaunch: true,
+  startWithWindows: false,
+  reduceTransparency: false,
+  unlockShortcut: "Ctrl+Alt+L",
+  toggleQuickBarShortcut: "Ctrl+Alt+M",
+};
+
 export interface AppState {
   sessions: MediaSessionSummary[];
   selectedSessionId: string | null;

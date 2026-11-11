@@ -80,6 +80,8 @@ export function applyMediaSnapshot(
 interface AppStore extends AppState {
   replaceSnapshot: (snapshot: MediaSnapshot) => void;
   selectSession: (sessionId: string) => void;
+  setLyrics: (lyrics: LyricsState) => void;
+  setDiagnostic: (diagnostic: AppState["diagnostic"]) => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -91,6 +93,10 @@ export const useAppStore = create<AppStore>((set) => ({
       selectedSessionId: sessionId,
       playback:
         state.playback?.sessionId === sessionId ? state.playback : null,
+      lyrics: idleLyrics,
     })),
+  setLyrics: (lyrics) => set({ lyrics }),
+  setDiagnostic: (diagnostic) => set({ diagnostic }),
 }));
+
 
