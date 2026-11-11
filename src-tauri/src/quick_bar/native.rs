@@ -15,11 +15,13 @@ use windows::Win32::{
 };
 
 use crate::commands::AppState;
+use crate::contracts::{AppSettings, WindowPosition};
 
 use super::{point_inside, InteractionLock};
 
 pub fn create<R: Runtime>(
     app: &tauri::AppHandle<R>,
+    settings: &AppSettings,
 ) -> tauri::Result<WebviewWindow<R>> {
     WebviewWindowBuilder::new(
         app,
@@ -27,7 +29,7 @@ pub fn create<R: Runtime>(
         WebviewUrl::App("index.html?window=quick".into()),
     )
     .title("流光便捷条")
-    .inner_size(248.0, 48.0)
+    .inner_size(width_dips(settings.quick_bar_width_cm), 48.0)
     .resizable(false)
     .decorations(false)
     .transparent(true)
@@ -36,15 +38,45 @@ pub fn create<R: Runtime>(
     .skip_taskbar(true)
     .focused(false)
     .focusable(false)
-    .visible(true)
+    .visible(false)
     .build()
 }
 
-pub fn configure<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
-    position_near_taskbar(window)?;
+pub fn configure<R: Runtime>(
+    window: &WebviewWindow<R>,
+    settings: &AppSettings,
+) -> Result<(), String> {
+    apply_geometry(
+        window,
+        settings.quick_bar_width_cm,
+        settings.quick_bar_position.as_ref(),
+    )?;
     window
         .set_ignore_cursor_events(true)
         .map_err(|error| error.to_string())
+}
+
+pub fn apply_geometry<R: Runtime>(
+    window: &WebviewWindow<R>,
+    width_cm: f64,
+    saved_position: Option<&WindowPosition>,
+) -> Result<(), String> {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let taskbar = taskbar_rect();
+    let height = taskbar
+        .map(|rect| (rect.bottom - rect.top) as f64 / scale)
+        .unwrap_or(48.0)
+        .clamp(40.0, 58.0);
+    let width = width_dips(width_cm);
+    let _ = window.set_size(tauri::LogicalSize::new(width, height));
+
+    if let Some(position) = saved_position {
+        return window
+            .set_position(PhysicalPosition::new(position.x, position.y))
+            .map_err(|error| error.to_string());
+    }
+    position_near_taskbar(window, taskbar)?;
+    Ok(())
 }
 
 pub fn set_click_through<R: Runtime>(
@@ -56,40 +88,47 @@ pub fn set_click_through<R: Runtime>(
         .map_err(|error| error.to_string())
 }
 
-fn position_near_taskbar<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
+fn taskbar_rect() -> Option<RECT> {
     let mut data = APPBARDATA {
         cbSize: std::mem::size_of::<APPBARDATA>() as u32,
         ..Default::default()
     };
     let has_taskbar = unsafe { SHAppBarMessage(ABM_GETTASKBARPOS, &mut data) } != 0;
 
-    if !has_taskbar || data.rc.right <= data.rc.left || data.rc.bottom <= data.rc.top {
-        return Ok(());
-    }
+    (has_taskbar && data.rc.right > data.rc.left && data.rc.bottom > data.rc.top)
+        .then_some(data.rc)
+}
 
-    let scale = window.scale_factor().unwrap_or(1.0);
-    let taskbar_height = (data.rc.bottom - data.rc.top) as f64 / scale;
-    let height = taskbar_height.clamp(40.0, 58.0);
-    let _ = window.set_size(tauri::LogicalSize::new(248.0, height));
+fn position_near_taskbar<R: Runtime>(
+    window: &WebviewWindow<R>,
+    taskbar: Option<RECT>,
+) -> Result<(), String> {
+    let Some(taskbar) = taskbar else {
+        return Ok(());
+    };
 
     let size = window.outer_size().map_err(|error| error.to_string())?;
     let width = size.width as i32;
     let height = size.height as i32;
-    let horizontal = data.rc.right - data.rc.left >= data.rc.bottom - data.rc.top;
+    let horizontal = taskbar.right - taskbar.left >= taskbar.bottom - taskbar.top;
     let position = if horizontal {
-        if data.rc.top > 0 {
-            PhysicalPosition::new(data.rc.left + 16, data.rc.top - height - 8)
+        if taskbar.top > 0 {
+            PhysicalPosition::new(taskbar.left + 16, taskbar.top - height - 8)
         } else {
-            PhysicalPosition::new(data.rc.left + 16, data.rc.bottom + 8)
+            PhysicalPosition::new(taskbar.left + 16, taskbar.bottom + 8)
         }
-    } else if data.rc.left > 0 {
-        PhysicalPosition::new(data.rc.left - width - 8, data.rc.top + 16)
+    } else if taskbar.left > 0 {
+        PhysicalPosition::new(taskbar.left - width - 8, taskbar.top + 16)
     } else {
-        PhysicalPosition::new(data.rc.right + 8, data.rc.top + 16)
+        PhysicalPosition::new(taskbar.right + 8, taskbar.top + 16)
     };
     window
         .set_position(position)
         .map_err(|error| error.to_string())
+}
+
+fn width_dips(width_cm: f64) -> f64 {
+    width_cm / 2.54 * 96.0
 }
 
 pub fn cursor_inside<R: Runtime>(window: &WebviewWindow<R>) -> bool {

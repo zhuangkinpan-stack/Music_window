@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type { LyricsState } from "../../contracts";
 import { useInteractionLock } from "../../hooks/useInteractionLock";
 import { usePlaybackPosition } from "../../hooks/usePlaybackPosition";
 import {
   getQuickBarLockState,
+  getSettings,
   isTauriRuntime,
   listenQuickBarHover,
   listenQuickBarLockState,
@@ -13,6 +15,7 @@ import {
   nextTrack,
   previousTrack,
   setQuickBarLocked,
+  saveQuickBarPosition,
   togglePlayPause,
   touchQuickBar,
 } from "../../lib/mediaApi";
@@ -44,6 +47,20 @@ export function QuickBarApp() {
   useEffect(() => {
     document.body.classList.add("quick-window");
     return () => document.body.classList.remove("quick-window");
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+    void getSettings()
+      .then((settings) => {
+        document.documentElement.dataset.theme = settings.theme;
+        document.documentElement.dataset.reduceTransparency = String(
+          settings.reduceTransparency,
+        );
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -101,6 +118,42 @@ export function QuickBarApp() {
       cleanups.forEach((cleanup) => cleanup());
     };
   }, [interaction.setLocked]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+    let active = true;
+    let saveTimer: number | null = null;
+    let cleanup: (() => void) | undefined;
+    void getCurrentWindow()
+      .onMoved(({ payload }) => {
+        if (saveTimer !== null) {
+          window.clearTimeout(saveTimer);
+        }
+        saveTimer = window.setTimeout(() => {
+          void saveQuickBarPosition(
+            payload.x,
+            payload.y,
+            null,
+          ).catch(() => undefined);
+        }, 300);
+      })
+      .then((unlisten) => {
+        if (active) {
+          cleanup = unlisten;
+        } else {
+          unlisten();
+        }
+      });
+    return () => {
+      active = false;
+      cleanup?.();
+      if (saveTimer !== null) {
+        window.clearTimeout(saveTimer);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!session || !playback || !isTauriRuntime()) {

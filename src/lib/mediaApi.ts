@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type {
+  AppSettings,
   LyricsState,
   MediaSessionSummary,
   MediaSnapshot,
@@ -82,6 +83,28 @@ export async function touchQuickBar(): Promise<void> {
 
 export async function toggleQuickBar(): Promise<boolean> {
   return invoke<boolean>("toggle_quick_bar");
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  return invoke<AppSettings>("get_settings");
+}
+
+export async function updateSettings(
+  settings: AppSettings,
+): Promise<AppSettings> {
+  return invoke<AppSettings>("update_settings", { settings });
+}
+
+export async function saveQuickBarPosition(
+  x: number,
+  y: number,
+  monitor: string | null,
+): Promise<void> {
+  await invoke("save_quick_bar_position", { x, y, monitor });
+}
+
+export async function setQuickBarVisible(visible: boolean): Promise<void> {
+  await invoke("set_quick_bar_visible", { visible });
 }
 
 export function listenQuickBarLockState(

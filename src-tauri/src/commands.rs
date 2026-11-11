@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use tauri::State;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_autostart::ManagerExt;
 
 use crate::{
     contracts::{LyricsState, MediaSnapshot},
@@ -10,12 +11,16 @@ use crate::{
     quick_bar::{
         schedule_auto_relock, set_lock_state, InteractionLock,
     },
+    settings::SettingsService,
 };
+use crate::contracts::{AppSettings, WindowPosition};
+use crate::shortcuts;
 
 pub struct AppState {
     pub media: Arc<MediaCoordinator>,
     pub lyrics: Arc<LyricsService>,
     pub interaction: Arc<InteractionLock>,
+    pub settings: Arc<SettingsService>,
 }
 
 impl AppState {
@@ -23,11 +28,13 @@ impl AppState {
         media: Arc<MediaCoordinator>,
         lyrics: Arc<LyricsService>,
         interaction: Arc<InteractionLock>,
+        settings: Arc<SettingsService>,
     ) -> Self {
         Self {
             media,
             lyrics,
             interaction,
+            settings,
         }
     }
 }
@@ -168,6 +175,84 @@ pub fn toggle_quick_bar(app: AppHandle) -> Result<bool, String> {
             .map_err(|error| error.to_string())?;
     }
     Ok(!visible)
+}
+
+#[tauri::command]
+pub fn get_settings(state: State<'_, AppState>) -> AppSettings {
+    state.settings.get()
+}
+
+#[tauri::command]
+pub fn update_settings(
+    settings: AppSettings,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AppSettings, String> {
+    let previous = state.settings.get();
+    crate::settings::validate_settings(&settings)
+        .map_err(|error| error.to_string())?;
+    let shortcuts_changed = settings.unlock_shortcut != previous.unlock_shortcut
+        || settings.toggle_quick_bar_shortcut
+            != previous.toggle_quick_bar_shortcut;
+    if shortcuts_changed {
+        if let Err(error) = shortcuts::rebind(&app, &settings) {
+            let _ = shortcuts::rebind(&app, &previous);
+            return Err(error);
+        }
+    }
+    if let Err(error) = state.settings.update(settings.clone()) {
+        if shortcuts_changed {
+            let _ = shortcuts::rebind(&app, &previous);
+        }
+        return Err(error.to_string());
+    }
+    if settings.start_with_windows {
+        app.autolaunch()
+            .enable()
+            .map_err(|error| error.to_string())?;
+    } else {
+        app.autolaunch()
+            .disable()
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(window) = app.get_webview_window("quick") {
+        crate::quick_bar::apply_geometry(
+            &window,
+            settings.quick_bar_width_cm,
+            settings.quick_bar_position.as_ref(),
+        )?;
+    }
+    Ok(settings)
+}
+
+#[tauri::command]
+pub fn save_quick_bar_position(
+    x: i32,
+    y: i32,
+    monitor: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut settings = state.settings.get();
+    settings.quick_bar_position = Some(WindowPosition { x, y, monitor });
+    state
+        .settings
+        .update(settings)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_quick_bar_visible(
+    visible: bool,
+    app: AppHandle,
+) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("quick") {
+        if visible {
+            window.show().map_err(|error| error.to_string())?;
+        } else {
+            window.hide().map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 fn error_message(error: MediaProviderError) -> String {

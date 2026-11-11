@@ -715,6 +715,22 @@ kbd {
   font-size: 11px;
 }
 
+.shortcut-list input {
+  width: 116px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  font-size: 11px;
+  text-align: center;
+}
+
+.shortcut-list input:focus {
+  border-color: var(--focus);
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -758,6 +774,18 @@ kbd {
 
 .quick-bar[data-locked="false"] {
   border-color: rgb(103 232 165 / 42%);
+}
+
+:root[data-reduce-transparency="true"] .main-window,
+:root[data-reduce-transparency="true"] .settings-panel {
+  background: color-mix(in srgb, var(--app-bg) 94%, transparent);
+  backdrop-filter: none;
+}
+
+:root[data-reduce-transparency="true"] .quick-bar,
+:root[data-reduce-transparency="true"] .quick-placeholder {
+  background: rgb(8 12 20 / 94%);
+  backdrop-filter: none;
 }
 
 .quick-art {

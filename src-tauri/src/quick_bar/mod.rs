@@ -6,7 +6,8 @@ use std::{
 };
 
 pub use native::{
-    configure, create, schedule_auto_relock, set_lock_state, start_hover_monitor,
+    apply_geometry, configure, create, schedule_auto_relock, set_lock_state,
+    start_hover_monitor,
 };
 
 pub const AUTO_LOCK_AFTER: Duration = Duration::from_secs(5);

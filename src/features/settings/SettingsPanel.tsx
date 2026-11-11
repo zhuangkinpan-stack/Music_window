@@ -101,11 +101,29 @@ export function SettingsPanel({
           <div className="shortcut-list">
             <div>
               <span>临时解锁便捷条</span>
-              <kbd>{settings.unlockShortcut}</kbd>
+              <input
+                aria-label="临时解锁快捷键"
+                value={settings.unlockShortcut}
+                onChange={(event) =>
+                  onChange({
+                    ...settings,
+                    unlockShortcut: event.target.value,
+                  })
+                }
+              />
             </div>
             <div>
               <span>显示/隐藏便捷条</span>
-              <kbd>{settings.toggleQuickBarShortcut}</kbd>
+              <input
+                aria-label="便捷条显示快捷键"
+                value={settings.toggleQuickBarShortcut}
+                onChange={(event) =>
+                  onChange({
+                    ...settings,
+                    toggleQuickBarShortcut: event.target.value,
+                  })
+                }
+              />
             </div>
           </div>
         </Dialog.Content>

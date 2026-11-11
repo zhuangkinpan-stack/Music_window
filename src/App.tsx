@@ -10,6 +10,7 @@ import { SettingsPanel } from "./features/settings/SettingsPanel";
 import { usePlaybackPosition } from "./hooks/usePlaybackPosition";
 import {
   hideMainWindow,
+  getSettings,
   isTauriRuntime,
   listSessions,
   loadLyrics,
@@ -17,7 +18,9 @@ import {
   nextTrack,
   previousTrack,
   selectSession,
+  setQuickBarVisible,
   togglePlayPause,
+  updateSettings,
 } from "./lib/mediaApi";
 import { useAppStore } from "./store/appStore";
 
@@ -42,6 +45,7 @@ export default function App() {
   } = useAppStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(defaultAppSettings);
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const positionMs = usePlaybackPosition(playback);
   const selectedSession = sessions.find(
@@ -50,7 +54,63 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
-  }, [settings.theme]);
+    document.documentElement.dataset.reduceTransparency = String(
+      settings.reduceTransparency,
+    );
+  }, [settings.reduceTransparency, settings.theme]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      setSettingsHydrated(true);
+      return;
+    }
+    let active = true;
+    void getSettings()
+      .then((loaded) => {
+        if (active) {
+          setSettings(loaded);
+          setSettingsHydrated(true);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSettingsHydrated(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!settingsHydrated || !isTauriRuntime()) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void updateSettings(settings).catch((error) =>
+        setDiagnostic({
+          code: "settings_failed",
+          message: `无法保存设置：${String(error)}`,
+          recoverable: true,
+        }),
+      );
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [settings, settingsHydrated, setDiagnostic]);
+
+  const hasSessions = sessions.length > 0;
+  useEffect(() => {
+    if (!settingsHydrated || !isTauriRuntime()) {
+      return;
+    }
+    void setQuickBarVisible(
+      hasSessions && settings.showQuickBarOnLaunch,
+    ).catch(() => undefined);
+  }, [
+    hasSessions,
+    settings.showQuickBarOnLaunch,
+    settingsHydrated,
+  ]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
