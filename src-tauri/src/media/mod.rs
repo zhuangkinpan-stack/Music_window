@@ -4,6 +4,7 @@ mod mock;
 mod session_provider;
 mod windows;
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -70,6 +71,14 @@ pub(crate) fn friendly_app_name(source: &str) -> String {
 
 pub(crate) fn ticks_to_millis(ticks: i64) -> i64 {
     ticks.max(0) / 10_000
+}
+
+pub(crate) fn image_data_uri(mime: &str, bytes: &[u8]) -> Option<String> {
+    let mime = mime.to_ascii_lowercase();
+    if !mime.starts_with("image/") || bytes.is_empty() || bytes.len() > 5 * 1024 * 1024 {
+        return None;
+    }
+    Some(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
 #[cfg(test)]

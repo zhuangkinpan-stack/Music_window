@@ -3,10 +3,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::{commands::AppState, contracts::AppSettings, quick_bar};
 
-pub fn rebind<R: Runtime>(
-    app: &tauri::AppHandle<R>,
-    settings: &AppSettings,
-) -> Result<(), String> {
+pub fn rebind<R: Runtime>(app: &tauri::AppHandle<R>, settings: &AppSettings) -> Result<(), String> {
     app.global_shortcut()
         .unregister_all()
         .map_err(|error| error.to_string())?;
@@ -15,9 +12,7 @@ pub fn rebind<R: Runtime>(
         .on_shortcut(settings.unlock_shortcut.as_str(), |app, _, event| {
             if event.state == ShortcutState::Pressed {
                 let state = app.state::<AppState>();
-                state
-                    .interaction
-                    .unlock(std::time::Instant::now());
+                state.interaction.unlock(std::time::Instant::now());
                 let _ = quick_bar::set_lock_state(app, false);
                 quick_bar::schedule_auto_relock(app.clone());
             }
@@ -42,4 +37,3 @@ pub fn rebind<R: Runtime>(
         )
         .map_err(|error| error.to_string())
 }
-

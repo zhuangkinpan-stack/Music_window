@@ -35,4 +35,3 @@ fn detects_cursor_inside_window_rectangle() {
     assert!(point_inside(12, 20, 0, 0, 100, 50));
     assert!(!point_inside(120, 20, 0, 0, 100, 50));
 }
-

@@ -14,4 +14,3 @@ pub trait MediaSessionProvider: Send + Sync {
     async fn previous_track(&self, session_id: &str) -> Result<bool, MediaProviderError>;
     async fn seek(&self, session_id: &str, position_ms: i64) -> Result<bool, MediaProviderError>;
 }
-

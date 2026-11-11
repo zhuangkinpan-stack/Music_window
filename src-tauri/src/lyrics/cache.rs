@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
 use sha2::{Digest, Sha256};
 
@@ -23,12 +20,10 @@ impl LyricsCache {
     }
 
     pub fn save(&self, track: &TrackQuery, result: &LyricsResult) -> Result<(), LyricsError> {
-        fs::create_dir_all(&self.root)
-            .map_err(|error| LyricsError::Io(error.to_string()))?;
-        let bytes = serde_json::to_vec(result)
-            .map_err(|error| LyricsError::Io(error.to_string()))?;
-        fs::write(self.path_for(track), bytes)
-            .map_err(|error| LyricsError::Io(error.to_string()))
+        fs::create_dir_all(&self.root).map_err(|error| LyricsError::Io(error.to_string()))?;
+        let bytes =
+            serde_json::to_vec(result).map_err(|error| LyricsError::Io(error.to_string()))?;
+        fs::write(self.path_for(track), bytes).map_err(|error| LyricsError::Io(error.to_string()))
     }
 
     fn path_for(&self, track: &TrackQuery) -> PathBuf {
@@ -47,4 +42,3 @@ fn cache_key(track: &TrackQuery) -> String {
     let digest = Sha256::digest(metadata.as_bytes());
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
-

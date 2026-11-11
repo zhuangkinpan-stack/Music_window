@@ -131,4 +131,3 @@ impl Default for AppSettings {
         }
     }
 }
-

@@ -4,9 +4,7 @@ use async_trait::async_trait;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use super::{
-    LyricsCandidate, LyricsError, LyricsFetcher, TrackQuery,
-};
+use super::{LyricsCandidate, LyricsError, LyricsFetcher, TrackQuery};
 
 pub struct LrclibFetcher {
     client: reqwest::Client,
@@ -128,4 +126,3 @@ impl Default for LrclibFetcher {
         Self::new().expect("LRCLIB client configuration is valid")
     }
 }
-

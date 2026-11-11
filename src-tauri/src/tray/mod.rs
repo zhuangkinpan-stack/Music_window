@@ -85,13 +85,9 @@ fn handle_action<R: Runtime>(app: &tauri::AppHandle<R>, action: TrayAction) {
                 let snapshot = media.snapshot().await;
                 if let Some(session_id) = snapshot.playback.map(|state| state.session_id) {
                     let _ = match action {
-                        TrayAction::PlayPause => {
-                            media.toggle_play_pause(&session_id).await
-                        }
+                        TrayAction::PlayPause => media.toggle_play_pause(&session_id).await,
                         TrayAction::Next => media.next_track(&session_id).await,
-                        TrayAction::Previous => {
-                            media.previous_track(&session_id).await
-                        }
+                        TrayAction::Previous => media.previous_track(&session_id).await,
                         _ => unreachable!(),
                     };
                 }
@@ -116,4 +112,3 @@ fn handle_action<R: Runtime>(app: &tauri::AppHandle<R>, action: TrayAction) {
 
 #[cfg(test)]
 mod tests;
-

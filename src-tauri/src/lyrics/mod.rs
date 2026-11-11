@@ -106,7 +106,9 @@ fn normalize_text(value: &str) -> String {
         .collect()
 }
 
-pub(crate) fn result_from_candidate(candidate: LyricsCandidate) -> Result<LyricsResult, LyricsError> {
+pub(crate) fn result_from_candidate(
+    candidate: LyricsCandidate,
+) -> Result<LyricsResult, LyricsError> {
     let lrc = candidate
         .synced_lyrics
         .ok_or_else(|| LyricsError::Parse("同步歌词为空".to_owned()))?;
@@ -118,4 +120,3 @@ pub(crate) fn result_from_candidate(candidate: LyricsCandidate) -> Result<Lyrics
 
 #[cfg(test)]
 mod tests;
-

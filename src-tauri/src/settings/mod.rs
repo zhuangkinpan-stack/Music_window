@@ -5,8 +5,8 @@ use std::{
     sync::RwLock,
 };
 
-use thiserror::Error;
 use tauri_plugin_global_shortcut::Shortcut;
+use thiserror::Error;
 
 use crate::contracts::AppSettings;
 
@@ -44,10 +44,7 @@ impl SettingsService {
     pub fn update(&self, settings: AppSettings) -> Result<(), SettingsError> {
         validate_settings(&settings)?;
         save_settings(&self.path, &settings)?;
-        *self
-            .settings
-            .write()
-            .expect("settings lock poisoned") = settings;
+        *self.settings.write().expect("settings lock poisoned") = settings;
         Ok(())
     }
 }
@@ -87,8 +84,7 @@ fn load_settings(path: &Path) -> AppSettings {
 
 fn save_settings(path: &Path, settings: &AppSettings) -> Result<(), SettingsError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| SettingsError::Io(error.to_string()))?;
+        fs::create_dir_all(parent).map_err(|error| SettingsError::Io(error.to_string()))?;
     }
     let bytes = serde_json::to_vec_pretty(settings)
         .map_err(|error| SettingsError::Serialize(error.to_string()))?;
@@ -97,4 +93,3 @@ fn save_settings(path: &Path, settings: &AppSettings) -> Result<(), SettingsErro
 
 #[cfg(test)]
 mod tests;
-

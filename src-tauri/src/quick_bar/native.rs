@@ -1,16 +1,13 @@
 use std::time::Duration;
 
 use tauri::{
-    Emitter, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder,
+    Emitter, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 use windows::Win32::{
     Foundation::{HWND, POINT, RECT},
     UI::{
-        Shell::{ABM_GETTASKBARPOS, APPBARDATA, SHAppBarMessage},
-        WindowsAndMessaging::{
-            GetCursorPos, GetWindowRect,
-        },
+        Shell::{SHAppBarMessage, ABM_GETTASKBARPOS, APPBARDATA},
+        WindowsAndMessaging::{GetCursorPos, GetWindowRect},
     },
 };
 
@@ -95,8 +92,7 @@ fn taskbar_rect() -> Option<RECT> {
     };
     let has_taskbar = unsafe { SHAppBarMessage(ABM_GETTASKBARPOS, &mut data) } != 0;
 
-    (has_taskbar && data.rc.right > data.rc.left && data.rc.bottom > data.rc.top)
-        .then_some(data.rc)
+    (has_taskbar && data.rc.right > data.rc.left && data.rc.bottom > data.rc.top).then_some(data.rc)
 }
 
 fn position_near_taskbar<R: Runtime>(
@@ -153,10 +149,7 @@ pub fn cursor_inside<R: Runtime>(window: &WebviewWindow<R>) -> bool {
     )
 }
 
-pub fn set_lock_state<R: Runtime>(
-    app: &tauri::AppHandle<R>,
-    locked: bool,
-) -> Result<(), String> {
+pub fn set_lock_state<R: Runtime>(app: &tauri::AppHandle<R>, locked: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("quick") {
         set_click_through(&window, locked)?;
     }
@@ -204,4 +197,3 @@ pub fn start_hover_monitor<R: Runtime>(
         }
     });
 }
-

@@ -27,9 +27,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            let media = Arc::new(MediaCoordinator::new(Arc::new(
-                WindowsMediaProvider::new(),
-            )));
+            let media = Arc::new(MediaCoordinator::new(Arc::new(WindowsMediaProvider::new())));
             let cache_dir = app
                 .path()
                 .app_cache_dir()
@@ -45,17 +43,10 @@ pub fn run() {
                 .app_config_dir()
                 .map_err(|error| error.to_string())?
                 .join("settings.json");
-            let settings = Arc::new(
-                SettingsService::load(settings_path)
-                    .map_err(|error| error.to_string())?,
-            );
+            let settings =
+                Arc::new(SettingsService::load(settings_path).map_err(|error| error.to_string())?);
             let initial_settings = settings.get();
-            app.manage(AppState::new(
-                media,
-                lyrics,
-                interaction.clone(),
-                settings,
-            ));
+            app.manage(AppState::new(media, lyrics, interaction.clone(), settings));
             tray::build(app)?;
 
             if let Some(main_window) = app.get_webview_window("main") {
@@ -102,4 +93,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("failed to run Lumi");
 }
-

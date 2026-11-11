@@ -9,4 +9,3 @@ fn maps_tray_menu_ids_to_actions() {
     );
     assert_eq!(TrayAction::from_id("unknown"), None);
 }
-

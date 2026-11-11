@@ -6,8 +6,8 @@ use std::sync::{
 use crate::contracts::{LyricsSource, LyricsState, LyricsStatus};
 
 use super::{
-    parse_lrc, result_from_candidate, select_candidate, LyricsCache, LyricsError,
-    LyricsFetcher, LyricsResult, TrackQuery,
+    parse_lrc, result_from_candidate, select_candidate, LyricsCache, LyricsError, LyricsFetcher,
+    LyricsResult, TrackQuery,
 };
 
 pub struct LyricsService {
@@ -110,4 +110,3 @@ fn error_state(error: LyricsError) -> LyricsState {
         error: Some(error.to_string()),
     }
 }
-

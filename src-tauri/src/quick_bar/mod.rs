@@ -6,8 +6,7 @@ use std::{
 };
 
 pub use native::{
-    apply_geometry, configure, create, schedule_auto_relock, set_lock_state,
-    start_hover_monitor,
+    apply_geometry, configure, create, schedule_auto_relock, set_lock_state, start_hover_monitor,
 };
 
 pub const AUTO_LOCK_AFTER: Duration = Duration::from_secs(5);
@@ -69,17 +68,9 @@ impl InteractionLock {
     }
 }
 
-pub fn point_inside(
-    x: i32,
-    y: i32,
-    left: i32,
-    top: i32,
-    right: i32,
-    bottom: i32,
-) -> bool {
+pub fn point_inside(x: i32, y: i32, left: i32, top: i32, right: i32, bottom: i32) -> bool {
     x >= left && x < right && y >= top && y < bottom
 }
 
 #[cfg(test)]
 mod tests;
-

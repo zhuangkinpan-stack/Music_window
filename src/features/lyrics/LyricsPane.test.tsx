@@ -36,5 +36,24 @@ describe("LyricsPane", () => {
 
     expect(screen.getByText("暂无同步歌词")).toBeVisible();
   });
+
+  it("shows a recoverable network failure with retry", () => {
+    render(
+      <LyricsPane
+        lyrics={{
+          status: "error",
+          source: "none",
+          lines: [],
+          error: "歌词网络请求失败",
+        }}
+        positionMs={0}
+        onRetry={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("歌词加载失败")).toBeVisible();
+    expect(screen.getByText("歌词网络请求失败")).toBeVisible();
+    expect(screen.getByRole("button", { name: "重新匹配" })).toBeEnabled();
+  });
 });
 

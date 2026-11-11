@@ -1,7 +1,5 @@
 use super::*;
-use crate::contracts::{
-    MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities,
-};
+use crate::contracts::{MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities};
 
 #[tokio::test]
 async fn coordinator_uses_current_session_when_selection_is_empty() {
@@ -14,16 +12,17 @@ async fn coordinator_uses_current_session_when_selection_is_empty() {
 
     let snapshot = coordinator.snapshot().await;
 
-    assert_eq!(snapshot.current_session_id.as_deref(), Some("cloudmusic.exe"));
+    assert_eq!(
+        snapshot.current_session_id.as_deref(),
+        Some("cloudmusic.exe")
+    );
 }
 
 struct FailingProvider;
 
 #[async_trait::async_trait]
 impl MediaSessionProvider for FailingProvider {
-    async fn current_session_id(
-        &self,
-    ) -> Result<Option<String>, MediaProviderError> {
+    async fn current_session_id(&self) -> Result<Option<String>, MediaProviderError> {
         Err(MediaProviderError::SystemUnavailable(
             "audio service missing".to_owned(),
         ))
@@ -35,19 +34,13 @@ impl MediaSessionProvider for FailingProvider {
         ))
     }
 
-    async fn playback_state(
-        &self,
-        _session_id: &str,
-    ) -> Result<PlaybackState, MediaProviderError> {
+    async fn playback_state(&self, _session_id: &str) -> Result<PlaybackState, MediaProviderError> {
         Err(MediaProviderError::SystemUnavailable(
             "audio service missing".to_owned(),
         ))
     }
 
-    async fn toggle_play_pause(
-        &self,
-        _session_id: &str,
-    ) -> Result<bool, MediaProviderError> {
+    async fn toggle_play_pause(&self, _session_id: &str) -> Result<bool, MediaProviderError> {
         Err(MediaProviderError::SystemUnavailable(
             "audio service missing".to_owned(),
         ))
@@ -59,20 +52,13 @@ impl MediaSessionProvider for FailingProvider {
         ))
     }
 
-    async fn previous_track(
-        &self,
-        _session_id: &str,
-    ) -> Result<bool, MediaProviderError> {
+    async fn previous_track(&self, _session_id: &str) -> Result<bool, MediaProviderError> {
         Err(MediaProviderError::SystemUnavailable(
             "audio service missing".to_owned(),
         ))
     }
 
-    async fn seek(
-        &self,
-        _session_id: &str,
-        _position_ms: i64,
-    ) -> Result<bool, MediaProviderError> {
+    async fn seek(&self, _session_id: &str, _position_ms: i64) -> Result<bool, MediaProviderError> {
         Err(MediaProviderError::SystemUnavailable(
             "audio service missing".to_owned(),
         ))
@@ -87,7 +73,10 @@ async fn coordinator_converts_provider_failure_to_diagnostic_snapshot() {
 
     assert!(snapshot.sessions.is_empty());
     assert_eq!(
-        snapshot.diagnostic.as_ref().map(|diagnostic| diagnostic.code.as_str()),
+        snapshot
+            .diagnostic
+            .as_ref()
+            .map(|diagnostic| diagnostic.code.as_str()),
         Some("smtc_unavailable")
     );
 }
@@ -107,6 +96,15 @@ fn maps_known_source_apps_to_friendly_names() {
 fn converts_windows_time_ticks_to_milliseconds() {
     assert_eq!(ticks_to_millis(10_000_000), 1_000);
     assert_eq!(ticks_to_millis(-10_000_000), 0);
+}
+
+#[test]
+fn builds_data_uri_only_for_supported_image_types() {
+    assert_eq!(
+        image_data_uri("image/png", b"abc").as_deref(),
+        Some("data:image/png;base64,YWJj")
+    );
+    assert!(image_data_uri("text/html", b"abc").is_none());
 }
 
 #[tokio::test]
@@ -154,4 +152,3 @@ fn mock_session(app_id: &str, capabilities: SessionCapabilities) -> MediaSession
         capabilities,
     }
 }
-

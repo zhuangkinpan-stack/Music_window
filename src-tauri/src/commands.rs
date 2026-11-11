@@ -4,17 +4,15 @@ use tauri::State;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
+use crate::contracts::{AppSettings, WindowPosition};
+use crate::shortcuts;
 use crate::{
     contracts::{LyricsState, MediaSnapshot},
     lyrics::{LyricsService, TrackQuery},
     media::{MediaCoordinator, MediaProviderError},
-    quick_bar::{
-        schedule_auto_relock, set_lock_state, InteractionLock,
-    },
+    quick_bar::{schedule_auto_relock, set_lock_state, InteractionLock},
     settings::SettingsService,
 };
-use crate::contracts::{AppSettings, WindowPosition};
-use crate::shortcuts;
 
 pub struct AppState {
     pub media: Arc<MediaCoordinator>,
@@ -142,9 +140,7 @@ pub fn set_quick_bar_locked(
     if locked {
         state.interaction.lock();
     } else {
-        state
-            .interaction
-            .unlock(std::time::Instant::now());
+        state.interaction.unlock(std::time::Instant::now());
     }
     set_lock_state(&app, locked)?;
     if !locked {
@@ -155,9 +151,7 @@ pub fn set_quick_bar_locked(
 
 #[tauri::command]
 pub fn touch_quick_bar(state: State<'_, AppState>) {
-    state
-        .interaction
-        .touch(std::time::Instant::now());
+    state.interaction.touch(std::time::Instant::now());
 }
 
 #[tauri::command]
@@ -189,11 +183,9 @@ pub fn update_settings(
     state: State<'_, AppState>,
 ) -> Result<AppSettings, String> {
     let previous = state.settings.get();
-    crate::settings::validate_settings(&settings)
-        .map_err(|error| error.to_string())?;
+    crate::settings::validate_settings(&settings).map_err(|error| error.to_string())?;
     let shortcuts_changed = settings.unlock_shortcut != previous.unlock_shortcut
-        || settings.toggle_quick_bar_shortcut
-            != previous.toggle_quick_bar_shortcut;
+        || settings.toggle_quick_bar_shortcut != previous.toggle_quick_bar_shortcut;
     if shortcuts_changed {
         if let Err(error) = shortcuts::rebind(&app, &settings) {
             let _ = shortcuts::rebind(&app, &previous);
@@ -241,10 +233,7 @@ pub fn save_quick_bar_position(
 }
 
 #[tauri::command]
-pub fn set_quick_bar_visible(
-    visible: bool,
-    app: AppHandle,
-) -> Result<(), String> {
+pub fn set_quick_bar_visible(visible: bool, app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("quick") {
         if visible {
             window.show().map_err(|error| error.to_string())?;
@@ -258,4 +247,3 @@ pub fn set_quick_bar_visible(
 fn error_message(error: MediaProviderError) -> String {
     error.to_string()
 }
-

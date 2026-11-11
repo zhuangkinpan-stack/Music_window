@@ -55,14 +55,17 @@ fn persisted_settings_round_trip() {
 fn rejects_invalid_or_duplicate_shortcuts() {
     assert!(validate_settings(&AppSettings::default()).is_ok());
 
-    let mut settings = AppSettings::default();
-    settings.unlock_shortcut = "not a shortcut".to_owned();
+    let settings = AppSettings {
+        unlock_shortcut: "not a shortcut".to_owned(),
+        ..Default::default()
+    };
 
     assert!(validate_settings(&settings).is_err());
 
-    settings = AppSettings::default();
-    settings.toggle_quick_bar_shortcut = settings.unlock_shortcut.clone();
+    let settings = AppSettings {
+        toggle_quick_bar_shortcut: AppSettings::default().unlock_shortcut,
+        ..Default::default()
+    };
 
     assert!(validate_settings(&settings).is_err());
 }
-

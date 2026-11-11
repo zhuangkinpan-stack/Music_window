@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Windows music control center"
 authors = ["zhuangkinpan-stack"]
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.90"
 
 [lib]
 name = "lumi_lib"
@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 async-trait = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 regex = "1"
 serde = { version = "1", features = ["derive"] }
@@ -24,15 +24,14 @@ sha2 = "0.10"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-store = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
-url = "2"
 windows = { version = "0.61", features = [
   "Foundation",
   "Foundation_Collections",
   "Media",
   "Media_Control",
+  "Storage_Streams",
   "Win32_Foundation",
   "Win32_Graphics_Dwm",
   "Win32_System_Com",

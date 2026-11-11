@@ -2,13 +2,9 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
-use crate::contracts::{
-    MediaDiagnostic, MediaSnapshot, PlaybackState,
-};
+use crate::contracts::{MediaDiagnostic, MediaSnapshot, PlaybackState};
 
-use super::{
-    MediaProviderError, MediaSessionProvider,
-};
+use super::{MediaProviderError, MediaSessionProvider};
 
 pub struct MediaCoordinator {
     provider: Arc<dyn MediaSessionProvider>,
@@ -36,12 +32,7 @@ impl MediaCoordinator {
             }
         };
 
-        let current_session_id = self
-            .provider
-            .current_session_id()
-            .await
-            .ok()
-            .flatten();
+        let current_session_id = self.provider.current_session_id().await.ok().flatten();
         let mut selected = self.selected_session_id.write().await;
         if selected
             .as_ref()
@@ -54,8 +45,7 @@ impl MediaCoordinator {
                     sessions
                         .iter()
                         .find(|session| {
-                            session.playback_status
-                                == crate::contracts::PlaybackStatus::Playing
+                            session.playback_status == crate::contracts::PlaybackStatus::Playing
                         })
                         .or_else(|| sessions.first())
                         .map(|session| session.id.clone())
@@ -95,10 +85,7 @@ impl MediaCoordinator {
         Ok(self.snapshot().await)
     }
 
-    pub async fn next_track(
-        &self,
-        session_id: &str,
-    ) -> Result<MediaSnapshot, MediaProviderError> {
+    pub async fn next_track(&self, session_id: &str) -> Result<MediaSnapshot, MediaProviderError> {
         self.provider.next_track(session_id).await?;
         Ok(self.snapshot().await)
     }
@@ -134,12 +121,7 @@ impl MediaCoordinator {
             None => None,
         };
         MediaSnapshot {
-            current_session_id: self
-                .provider
-                .current_session_id()
-                .await
-                .ok()
-                .flatten(),
+            current_session_id: self.provider.current_session_id().await.ok().flatten(),
             sessions,
             playback,
             diagnostic: None,
@@ -166,4 +148,3 @@ fn error_to_diagnostic(error: &MediaProviderError) -> MediaDiagnostic {
         },
     }
 }
-

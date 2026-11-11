@@ -90,16 +90,13 @@ fn parse_fraction_ms(value: &str) -> i64 {
 fn timestamp_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
-        Regex::new(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
-            .expect("valid LRC timestamp regex")
+        Regex::new(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]").expect("valid LRC timestamp regex")
     })
 }
 
 fn offset_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
-        Regex::new(r"(?i)^\[offset:\s*([+-]?\d+)\s*\]$")
-            .expect("valid LRC offset regex")
+        Regex::new(r"(?i)^\[offset:\s*([+-]?\d+)\s*\]$").expect("valid LRC offset regex")
     })
 }
-

@@ -74,10 +74,7 @@ async fn offline_load_uses_cached_automatic_lyrics() {
             },
         )
         .unwrap();
-    let service = LyricsService::new(
-        Arc::new(FailingFetcher),
-        cache,
-    );
+    let service = LyricsService::new(Arc::new(FailingFetcher), cache);
 
     let state = service.load(&track_query(), None).await;
 
@@ -142,4 +139,3 @@ impl LyricsFetcher for DelayedFetcher {
         Ok(Vec::new())
     }
 }
-

@@ -46,10 +46,7 @@ impl MockMediaProvider {
             .remove(session_id);
     }
 
-    fn session(
-        &self,
-        session_id: &str,
-    ) -> Result<MediaSessionSummary, MediaProviderError> {
+    fn session(&self, session_id: &str) -> Result<MediaSessionSummary, MediaProviderError> {
         self.sessions
             .read()
             .expect("mock session lock poisoned")
@@ -61,9 +58,7 @@ impl MockMediaProvider {
 
 #[async_trait]
 impl MediaSessionProvider for MockMediaProvider {
-    async fn current_session_id(
-        &self,
-    ) -> Result<Option<String>, MediaProviderError> {
+    async fn current_session_id(&self) -> Result<Option<String>, MediaProviderError> {
         Ok(self
             .current_session
             .read()
@@ -81,10 +76,7 @@ impl MediaSessionProvider for MockMediaProvider {
             .collect())
     }
 
-    async fn playback_state(
-        &self,
-        session_id: &str,
-    ) -> Result<PlaybackState, MediaProviderError> {
+    async fn playback_state(&self, session_id: &str) -> Result<PlaybackState, MediaProviderError> {
         let session = self.session(session_id)?;
         Ok(PlaybackState {
             session_id: session.id,
@@ -94,10 +86,7 @@ impl MediaSessionProvider for MockMediaProvider {
         })
     }
 
-    async fn toggle_play_pause(
-        &self,
-        session_id: &str,
-    ) -> Result<bool, MediaProviderError> {
+    async fn toggle_play_pause(&self, session_id: &str) -> Result<bool, MediaProviderError> {
         Ok(self.session(session_id)?.capabilities.play_pause)
     }
 
@@ -105,10 +94,7 @@ impl MediaSessionProvider for MockMediaProvider {
         Ok(self.session(session_id)?.capabilities.next)
     }
 
-    async fn previous_track(
-        &self,
-        session_id: &str,
-    ) -> Result<bool, MediaProviderError> {
+    async fn previous_track(&self, session_id: &str) -> Result<bool, MediaProviderError> {
         Ok(self.session(session_id)?.capabilities.previous)
     }
 
@@ -116,4 +102,3 @@ impl MediaSessionProvider for MockMediaProvider {
         Ok(self.session(session_id)?.capabilities.seek)
     }
 }
-
