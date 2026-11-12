@@ -4,10 +4,12 @@ import * as Switch from "@radix-ui/react-switch";
 import { X } from "lucide-react";
 
 import type { AppSettings } from "../../contracts";
+import { formatShortcut } from "./shortcutCapture";
 
 interface SettingsPanelProps {
   open: boolean;
   settings: AppSettings;
+  shortcutError?: string | null;
   onOpenChange: (open: boolean) => void;
   onChange: (settings: AppSettings) => void;
 }
@@ -15,6 +17,7 @@ interface SettingsPanelProps {
 export function SettingsPanel({
   open,
   settings,
+  shortcutError,
   onOpenChange,
   onChange,
 }: SettingsPanelProps) {
@@ -76,6 +79,29 @@ export function SettingsPanel({
             </Slider.Root>
           </div>
 
+          <div className="settings-group">
+            <div className="settings-row">
+              <span>歌词偏移</span>
+              <output>{formatLyricOffset(settings.lyricOffsetMs)}</output>
+            </div>
+            <Slider.Root
+              className="slider"
+              min={-10_000}
+              max={10_000}
+              step={500}
+              value={[settings.lyricOffsetMs]}
+              onValueChange={([lyricOffsetMs]) =>
+                onChange({ ...settings, lyricOffsetMs })
+              }
+              aria-label="歌词偏移"
+            >
+              <Slider.Track className="slider-track">
+                <Slider.Range className="slider-range" />
+              </Slider.Track>
+              <Slider.Thumb className="slider-thumb" />
+            </Slider.Root>
+          </div>
+
           <SettingSwitch
             label="启动时显示便捷条"
             checked={settings.showQuickBarOnLaunch}
@@ -104,12 +130,17 @@ export function SettingsPanel({
               <input
                 aria-label="临时解锁快捷键"
                 value={settings.unlockShortcut}
-                onChange={(event) =>
-                  onChange({
-                    ...settings,
-                    unlockShortcut: event.target.value,
-                  })
-                }
+                readOnly
+                onKeyDown={(event) => {
+                  const shortcut = formatShortcut(event);
+                  if (shortcut) {
+                    event.preventDefault();
+                    onChange({
+                      ...settings,
+                      unlockShortcut: shortcut,
+                    });
+                  }
+                }}
               />
             </div>
             <div>
@@ -117,14 +148,24 @@ export function SettingsPanel({
               <input
                 aria-label="便捷条显示快捷键"
                 value={settings.toggleQuickBarShortcut}
-                onChange={(event) =>
-                  onChange({
-                    ...settings,
-                    toggleQuickBarShortcut: event.target.value,
-                  })
-                }
+                readOnly
+                onKeyDown={(event) => {
+                  const shortcut = formatShortcut(event);
+                  if (shortcut) {
+                    event.preventDefault();
+                    onChange({
+                      ...settings,
+                      toggleQuickBarShortcut: shortcut,
+                    });
+                  }
+                }}
               />
             </div>
+            {shortcutError ? (
+              <p className="settings-error" role="alert">
+                {shortcutError}
+              </p>
+            ) : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -152,5 +193,11 @@ function SettingSwitch({ label, checked, onChange }: SettingSwitchProps) {
       </Switch.Root>
     </div>
   );
+}
+
+function formatLyricOffset(offsetMs: number): string {
+  const seconds = offsetMs / 1_000;
+  const sign = seconds > 0 ? "+" : "";
+  return `${sign}${seconds.toFixed(1)} s`;
 }
 

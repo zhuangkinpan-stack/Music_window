@@ -1,6 +1,7 @@
 use std::{
     sync::mpsc::{self, SyncSender},
-    time::Duration,
+    sync::Mutex,
+    time::{Duration, Instant},
 };
 
 use ::windows::{
@@ -28,12 +29,104 @@ use ::windows::{
 
 use crate::contracts::{MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities};
 
+use super::netease_timeline::{capture_netease_timeline, TimelineFailureTracker};
 use super::MediaProviderError;
 
 pub const NET_EASE_SESSION_ID: &str = "netease:cloudmusic";
 pub const APPCOMMAND_MEDIA_NEXTTRACK: u32 = 11;
 pub const APPCOMMAND_MEDIA_PREVIOUSTRACK: u32 = 12;
 pub const APPCOMMAND_MEDIA_PLAY_PAUSE: u32 = 14;
+const COMMAND_OVERRIDE_TTL: Duration = Duration::from_secs(3);
+
+#[derive(Clone, Copy)]
+struct CommandOverride {
+    status: PlaybackStatus,
+    started_at: Instant,
+}
+
+#[derive(Clone, Copy)]
+struct TimelineSample {
+    position_ms: i64,
+    duration_ms: i64,
+    captured_at: Instant,
+}
+
+pub(crate) struct NeteaseRuntimeState {
+    track_key: String,
+    command_override: Option<CommandOverride>,
+    timeline: Option<TimelineSample>,
+}
+
+impl NeteaseRuntimeState {
+    pub(crate) fn new(track_key: String) -> Self {
+        Self {
+            track_key,
+            command_override: None,
+            timeline: None,
+        }
+    }
+
+    pub(crate) fn observe_track(&mut self, track_key: &str) -> bool {
+        if self.track_key != track_key {
+            self.track_key = track_key.to_owned();
+            self.command_override = None;
+            self.timeline = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn set_command_override(&mut self, status: PlaybackStatus, started_at: Instant) {
+        self.command_override = Some(CommandOverride { status, started_at });
+    }
+
+    pub(crate) fn status_at(&self, now: Instant, observed: PlaybackStatus) -> PlaybackStatus {
+        self.command_override
+            .filter(|value| now.duration_since(value.started_at) < COMMAND_OVERRIDE_TTL)
+            .map_or(observed, |value| value.status)
+    }
+
+    pub(crate) fn set_timeline(
+        &mut self,
+        position_ms: i64,
+        duration_ms: i64,
+        captured_at: Instant,
+    ) {
+        self.timeline = Some(TimelineSample {
+            position_ms,
+            duration_ms,
+            captured_at,
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn timeline(&self) -> Option<(i64, i64)> {
+        self.timeline
+            .map(|value| (value.position_ms, value.duration_ms))
+    }
+
+    pub(crate) fn timeline_at(&self, now: Instant, status: PlaybackStatus) -> Option<(i64, i64)> {
+        self.timeline.map(|value| {
+            let elapsed = if status == PlaybackStatus::Playing {
+                now.duration_since(value.captured_at).as_millis() as i64
+            } else {
+                0
+            };
+            (
+                value
+                    .position_ms
+                    .saturating_add(elapsed)
+                    .min(value.duration_ms.max(0)),
+                value.duration_ms,
+            )
+        })
+    }
+}
+
+pub(crate) fn netease_track_key(title: &str, artist: &str) -> String {
+    format!("{}\u{1f}{}", title.trim(), artist.trim())
+}
 
 pub fn parse_netease_window_title(title: &str) -> Option<(String, String)> {
     let title = title.trim();
@@ -68,22 +161,24 @@ pub(crate) fn is_cloudmusic_executable(path: &str) -> bool {
 
 pub struct NeteaseClient {
     audio_probe: AudioSessionProbe,
+    runtime: Mutex<NeteaseRuntimeState>,
+    timeline_failures: Mutex<TimelineFailureTracker>,
+    last_timeline_poll: Mutex<Option<Instant>>,
 }
 
 impl NeteaseClient {
     pub fn new() -> Self {
         Self {
             audio_probe: AudioSessionProbe::new(),
+            runtime: Mutex::new(NeteaseRuntimeState::new(String::new())),
+            timeline_failures: Mutex::new(TimelineFailureTracker::new()),
+            last_timeline_poll: Mutex::new(None),
         }
     }
 
     pub fn session(&self) -> Option<MediaSessionSummary> {
         let window = find_netease_window()?;
-        let playback_status = if self.audio_probe.has_active_session(window.process_id) {
-            PlaybackStatus::Playing
-        } else {
-            PlaybackStatus::Paused
-        };
+        let (_, playback_status) = self.observe_window(&window);
 
         Some(MediaSessionSummary {
             id: NET_EASE_SESSION_ID.to_owned(),
@@ -110,14 +205,54 @@ impl NeteaseClient {
 
     pub fn playback_state(&self, session_id: &str) -> Result<PlaybackState, MediaProviderError> {
         ensure_netease_id(session_id)?;
-        let session = self
-            .session()
+        let window = find_netease_window()
             .ok_or_else(|| MediaProviderError::SessionNotFound(session_id.to_owned()))?;
+        let (_, playback_status) = self.observe_window(&window);
+
+        let timeline_estimated = self
+            .timeline_failures
+            .lock()
+            .expect("Netease timeline failure lock poisoned")
+            .is_estimated();
+        if playback_status == PlaybackStatus::Playing
+            && !timeline_estimated
+            && self.timeline_poll_due()
+        {
+            let captured = capture_netease_timeline(window.hwnd);
+            let mut failures = self
+                .timeline_failures
+                .lock()
+                .expect("Netease timeline failure lock poisoned");
+            if let Some((position_ms, duration_ms)) = captured {
+                self.runtime
+                    .lock()
+                    .expect("Netease runtime lock poisoned")
+                    .set_timeline(position_ms, duration_ms, Instant::now());
+                failures.record_success();
+            } else {
+                failures.record_failure();
+            }
+        }
+
+        let now = Instant::now();
+        let timeline = self
+            .runtime
+            .lock()
+            .expect("Netease runtime lock poisoned")
+            .timeline_at(now, playback_status);
+        let (position_ms, duration_ms) = timeline.unwrap_or((0, 0));
+        let timeline_estimated = timeline.is_none()
+            || self
+                .timeline_failures
+                .lock()
+                .expect("Netease timeline failure lock poisoned")
+                .is_estimated();
         Ok(PlaybackState {
-            session_id: session.id,
-            playback_status: session.playback_status,
-            position_ms: 0,
-            duration_ms: 0,
+            session_id: NET_EASE_SESSION_ID.to_owned(),
+            playback_status,
+            position_ms,
+            duration_ms,
+            timeline_estimated,
         })
     }
 
@@ -125,7 +260,58 @@ impl NeteaseClient {
         ensure_netease_id(session_id)?;
         let window = find_netease_window()
             .ok_or_else(|| MediaProviderError::SessionNotFound(session_id.to_owned()))?;
-        Ok(unsafe { click_netease_control(window.hwnd, command) }.unwrap_or(false))
+        let now = Instant::now();
+        let (_, current_status) = self.observe_window(&window);
+        let succeeded = unsafe { click_netease_control(window.hwnd, command) }.unwrap_or(false);
+        if succeeded && command == APPCOMMAND_MEDIA_PLAY_PAUSE {
+            let next = if current_status == PlaybackStatus::Playing {
+                PlaybackStatus::Paused
+            } else {
+                PlaybackStatus::Playing
+            };
+            self.runtime
+                .lock()
+                .expect("Netease runtime lock poisoned")
+                .set_command_override(next, now);
+        }
+        Ok(succeeded)
+    }
+
+    fn observe_window(&self, window: &NeteaseWindow) -> (bool, PlaybackStatus) {
+        let track_key = netease_track_key(&window.track, &window.artist);
+        let observed = if self.audio_probe.has_active_session(window.process_id) {
+            PlaybackStatus::Playing
+        } else {
+            PlaybackStatus::Paused
+        };
+        let mut runtime = self.runtime.lock().expect("Netease runtime lock poisoned");
+        let track_changed = runtime.observe_track(&track_key);
+        let status = runtime.status_at(Instant::now(), observed);
+        drop(runtime);
+        if track_changed {
+            *self
+                .last_timeline_poll
+                .lock()
+                .expect("Netease poll lock poisoned") = None;
+            self.timeline_failures
+                .lock()
+                .expect("Netease timeline failure lock poisoned")
+                .record_success();
+        }
+        (track_changed, status)
+    }
+
+    fn timeline_poll_due(&self) -> bool {
+        let now = Instant::now();
+        let mut last_poll = self
+            .last_timeline_poll
+            .lock()
+            .expect("Netease poll lock poisoned");
+        if last_poll.is_some_and(|value| now.duration_since(value) < Duration::from_secs(1)) {
+            return false;
+        }
+        *last_poll = Some(now);
+        true
     }
 }
 
@@ -146,9 +332,6 @@ struct NeteaseWindow {
 
 fn find_netease_window() -> Option<NeteaseWindow> {
     let hwnd = unsafe { FindWindowW(w!("OrpheusBrowserHost"), PCWSTR::null()) }.ok()?;
-    if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
-        return None;
-    }
 
     let length = unsafe { GetWindowTextLengthW(hwnd) };
     if length <= 0 {

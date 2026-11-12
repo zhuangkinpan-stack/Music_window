@@ -12,6 +12,7 @@ const idleLyrics: LyricsState = {
   status: "idle",
   source: "none",
   lines: [],
+  durationMs: 0,
   error: null,
 };
 

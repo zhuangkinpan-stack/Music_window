@@ -29,6 +29,7 @@ function playingSnapshot(sessionId: string): MediaSnapshot {
       playbackStatus: "playing",
       positionMs: 42_000,
       durationMs: 269_000,
+      timelineEstimated: false,
     },
     diagnostic: null,
   };

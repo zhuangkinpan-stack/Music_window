@@ -2,6 +2,7 @@ mod coordinator;
 #[cfg(test)]
 mod mock;
 mod netease;
+mod netease_timeline;
 mod session_provider;
 mod windows;
 
@@ -12,7 +13,8 @@ pub use mock::MockMediaProvider;
 #[cfg(test)]
 pub(crate) use netease::{
     is_cloudmusic_executable, netease_control_point, parse_netease_window_title,
-    APPCOMMAND_MEDIA_NEXTTRACK, APPCOMMAND_MEDIA_PLAY_PAUSE, APPCOMMAND_MEDIA_PREVIOUSTRACK,
+    NeteaseRuntimeState, APPCOMMAND_MEDIA_NEXTTRACK, APPCOMMAND_MEDIA_PLAY_PAUSE,
+    APPCOMMAND_MEDIA_PREVIOUSTRACK,
 };
 pub use session_provider::MediaSessionProvider;
 #[allow(unused_imports)]

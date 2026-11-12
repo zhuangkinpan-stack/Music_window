@@ -20,6 +20,7 @@ interface QuickBarProps {
   playback: PlaybackState;
   lyrics: LyricsState;
   positionMs: number;
+  offsetMs?: number;
   locked: boolean;
   hovered: boolean;
   onPlayPause: () => void;
@@ -33,6 +34,7 @@ export function QuickBar({
   playback,
   lyrics,
   positionMs,
+  offsetMs = 0,
   locked,
   hovered,
   onPlayPause,
@@ -40,7 +42,7 @@ export function QuickBar({
   onPrevious,
   onInteract,
 }: QuickBarProps) {
-  const lyric = currentLyric(lyrics, positionMs);
+  const lyric = currentLyric(lyrics, Math.max(0, positionMs + offsetMs));
   const playing = playback.playbackStatus === "playing";
   const artwork = artworkSource(session.artworkUrl);
 

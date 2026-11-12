@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use tauri::State;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_autostart::ManagerExt;
 
 use crate::contracts::{AppSettings, WindowPosition};
 use crate::shortcuts;
@@ -188,14 +187,23 @@ pub fn update_settings(
     let shortcuts_changed = settings.unlock_shortcut != previous.unlock_shortcut
         || settings.toggle_quick_bar_shortcut != previous.toggle_quick_bar_shortcut;
     if shortcuts_changed {
-        if let Err(error) = shortcuts::rebind(&app, &settings) {
-            let _ = shortcuts::rebind(&app, &previous);
+        shortcuts::rebind(&app, &previous, &settings)?;
+    }
+    let autostart_changed = settings.start_with_windows != previous.start_with_windows;
+    if autostart_changed {
+        if let Err(error) = crate::autostart::set_enabled(settings.start_with_windows) {
+            if shortcuts_changed {
+                let _ = shortcuts::rebind(&app, &settings, &previous);
+            }
             return Err(error);
         }
     }
     if let Err(error) = state.settings.update(settings.clone()) {
         if shortcuts_changed {
-            let _ = shortcuts::rebind(&app, &previous);
+            let _ = shortcuts::rebind(&app, &settings, &previous);
+        }
+        if autostart_changed {
+            let _ = crate::autostart::set_enabled(previous.start_with_windows);
         }
         return Err(error.to_string());
     }
@@ -207,15 +215,6 @@ pub fn update_settings(
         )?;
     }
     let _ = app.emit("settings://changed", &settings);
-    if settings.start_with_windows {
-        app.autolaunch()
-            .enable()
-            .map_err(|error| error.to_string())?;
-    } else {
-        app.autolaunch()
-            .disable()
-            .map_err(|error| error.to_string())?;
-    }
     Ok(settings)
 }
 

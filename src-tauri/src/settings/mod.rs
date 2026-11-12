@@ -27,7 +27,10 @@ pub struct SettingsService {
 
 impl SettingsService {
     pub fn load(path: PathBuf) -> Result<Self, SettingsError> {
-        let settings = load_settings(&path);
+        let (settings, migrated) = load_settings(&path);
+        if migrated {
+            let _ = save_settings(&path, &settings);
+        }
         Ok(Self {
             path,
             settings: RwLock::new(settings),
@@ -84,12 +87,24 @@ pub fn merge_settings(mut current: AppSettings, incoming: AppSettings) -> AppSet
     }
 }
 
-fn load_settings(path: &Path) -> AppSettings {
-    fs::read(path)
+fn load_settings(path: &Path) -> (AppSettings, bool) {
+    let settings = fs::read(path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<AppSettings>(&bytes).ok())
         .filter(|settings| validate_settings(settings).is_ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if settings
+        .toggle_quick_bar_shortcut
+        .eq_ignore_ascii_case("Ctrl+Alt+M")
+    {
+        let migrated = AppSettings {
+            toggle_quick_bar_shortcut: "Ctrl+Alt+Q".to_owned(),
+            ..settings
+        };
+        (migrated, true)
+    } else {
+        (settings, false)
+    }
 }
 
 fn save_settings(path: &Path, settings: &AppSettings) -> Result<(), SettingsError> {

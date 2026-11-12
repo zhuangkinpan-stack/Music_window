@@ -1,7 +1,6 @@
 use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, Manager, Runtime};
-use tauri_plugin_autostart::ManagerExt;
 
-use crate::commands::AppState;
+use crate::{autostart, commands::AppState};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrayAction {
@@ -97,11 +96,7 @@ fn handle_action<R: Runtime>(app: &tauri::AppHandle<R>, action: TrayAction) {
             let state = app.state::<AppState>();
             let mut settings = state.settings.get();
             settings.start_with_windows = !settings.start_with_windows;
-            let autostart_result = if settings.start_with_windows {
-                app.autolaunch().enable()
-            } else {
-                app.autolaunch().disable()
-            };
+            let autostart_result = autostart::set_enabled(settings.start_with_windows);
             if autostart_result.is_ok() {
                 let _ = state.settings.update(settings);
             }

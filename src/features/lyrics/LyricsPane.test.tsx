@@ -7,6 +7,7 @@ import { LyricsPane } from "./LyricsPane";
 const ready: LyricsState = {
   status: "ready",
   source: "automatic",
+  durationMs: 269_000,
   error: null,
   lines: [
     { timeMs: 1_000, text: "故事的小黄花" },
@@ -26,10 +27,25 @@ describe("LyricsPane", () => {
     expect(screen.getByText("故事的小黄花")).not.toHaveAttribute("aria-current");
   });
 
+  it("applies the configured lyrics offset", () => {
+    render(<LyricsPane lyrics={ready} positionMs={4_500} offsetMs={-2_000} />);
+
+    expect(screen.getByText("故事的小黄花")).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+  });
+
   it("explains that no synchronized lyrics were found", () => {
     render(
       <LyricsPane
-        lyrics={{ status: "notFound", source: "none", lines: [], error: null }}
+        lyrics={{
+          status: "notFound",
+          source: "none",
+          lines: [],
+          durationMs: 0,
+          error: null,
+        }}
         positionMs={0}
       />,
     );
@@ -44,6 +60,7 @@ describe("LyricsPane", () => {
           status: "error",
           source: "none",
           lines: [],
+          durationMs: 0,
           error: "歌词网络请求失败",
         }}
         positionMs={0}

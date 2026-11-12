@@ -15,7 +15,7 @@ impl LrclibFetcher {
     pub fn new() -> Result<Self, LyricsError> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(8))
-            .user_agent("Lumi/0.1 (Windows desktop music controller)")
+            .user_agent("Lumi/0.2 (Windows desktop music controller)")
             .build()
             .map_err(|error| LyricsError::Network(error.to_string()))?;
         Ok(Self {
@@ -72,6 +72,16 @@ impl LrclibFetcher {
         drop(query);
         Ok(url)
     }
+
+    fn q_search_url(&self, track: &TrackQuery) -> Result<reqwest::Url, LyricsError> {
+        let mut url = reqwest::Url::parse(&format!("{}/api/search", self.base_url))
+            .map_err(|error| LyricsError::Parse(error.to_string()))?;
+        url.query_pairs_mut().append_pair(
+            "q",
+            &format!("{} {}", track.title.trim(), track.artist.trim()),
+        );
+        Ok(url)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,7 +113,7 @@ impl From<LrclibRecord> for LyricsCandidate {
 #[async_trait]
 impl LyricsFetcher for LrclibFetcher {
     async fn lookup(&self, track: &TrackQuery) -> Result<Vec<LyricsCandidate>, LyricsError> {
-        let mut candidates = Vec::new();
+        let mut candidates: Vec<LyricsCandidate> = Vec::new();
         if let Some(record) = self
             .request_json::<LrclibRecord>(self.exact_url(track)?)
             .await?
@@ -117,6 +127,24 @@ impl LyricsFetcher for LrclibFetcher {
         {
             candidates.extend(records.into_iter().map(Into::into));
         }
+        if let Some(records) = self
+            .request_json::<Vec<LrclibRecord>>(self.q_search_url(track)?)
+            .await?
+        {
+            candidates.extend(records.into_iter().map(Into::into));
+        }
+        candidates.sort_by(|left, right| {
+            (&left.track_name, &left.artist_name, left.duration_ms).cmp(&(
+                &right.track_name,
+                &right.artist_name,
+                right.duration_ms,
+            ))
+        });
+        candidates.dedup_by(|left, right| {
+            left.track_name == right.track_name
+                && left.artist_name == right.artist_name
+                && left.duration_ms == right.duration_ms
+        });
         Ok(candidates)
     }
 }

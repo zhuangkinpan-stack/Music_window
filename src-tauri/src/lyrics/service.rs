@@ -2,6 +2,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
+use std::time::Duration;
 
 use crate::contracts::{LyricsSource, LyricsState, LyricsStatus};
 
@@ -11,17 +12,27 @@ use super::{
 };
 
 pub struct LyricsService {
-    fetcher: Arc<dyn LyricsFetcher>,
+    fetchers: Vec<Arc<dyn LyricsFetcher>>,
     cache: LyricsCache,
     generation: AtomicU64,
+    fetcher_timeout: Duration,
 }
 
 impl LyricsService {
-    pub fn new(fetcher: Arc<dyn LyricsFetcher>, cache: LyricsCache) -> Self {
+    pub fn new(fetchers: Vec<Arc<dyn LyricsFetcher>>, cache: LyricsCache) -> Self {
+        Self::with_timeout(fetchers, cache, Duration::from_secs(4))
+    }
+
+    pub fn with_timeout(
+        fetchers: Vec<Arc<dyn LyricsFetcher>>,
+        cache: LyricsCache,
+        fetcher_timeout: Duration,
+    ) -> Self {
         Self {
-            fetcher,
+            fetchers,
             cache,
             generation: AtomicU64::new(0),
+            fetcher_timeout,
         }
     }
 
@@ -42,6 +53,7 @@ impl LyricsService {
                     let result = LyricsResult {
                         source: LyricsSource::Manual,
                         lines,
+                        duration_ms: 0,
                     };
                     if let Err(error) = self.cache.save(track, &result) {
                         return error_state(error);
@@ -52,6 +64,7 @@ impl LyricsService {
                     status: LyricsStatus::Error,
                     source: LyricsSource::Manual,
                     lines: Vec::new(),
+                    duration_ms: 0,
                     error: Some(error.to_string()),
                 },
             };
@@ -61,24 +74,41 @@ impl LyricsService {
             return ready_state(cached);
         }
 
-        let candidates = match self.fetcher.lookup(track).await {
-            Ok(candidates) => candidates,
-            Err(error) => return error_state(error),
-        };
-        if !self.is_current(token) {
-            return LyricsState {
-                status: LyricsStatus::Idle,
-                source: LyricsSource::None,
-                lines: Vec::new(),
-                error: None,
-            };
+        let mut last_error = None;
+        let mut candidate = None;
+        for fetcher in &self.fetchers {
+            let lookup = tokio::time::timeout(self.fetcher_timeout, fetcher.lookup(track)).await;
+            match lookup {
+                Ok(Ok(candidates)) => {
+                    if let Some(found) = select_candidate(track, &candidates) {
+                        candidate = Some(found);
+                        break;
+                    }
+                }
+                Ok(Err(error)) => last_error = Some(error),
+                Err(_) => {
+                    last_error = Some(LyricsError::Network("歌词源请求超时".to_owned()));
+                }
+            }
+            if !self.is_current(token) {
+                return LyricsState {
+                    status: LyricsStatus::Idle,
+                    source: LyricsSource::None,
+                    lines: Vec::new(),
+                    duration_ms: 0,
+                    error: None,
+                };
+            }
         }
-
-        let Some(candidate) = select_candidate(track, &candidates) else {
+        if let Some(error) = last_error.filter(|_| candidate.is_none()) {
+            return error_state(error);
+        }
+        let Some(candidate) = candidate else {
             return LyricsState {
                 status: LyricsStatus::NotFound,
                 source: LyricsSource::None,
                 lines: Vec::new(),
+                duration_ms: 0,
                 error: None,
             };
         };
@@ -97,6 +127,7 @@ fn ready_state(result: LyricsResult) -> LyricsState {
     LyricsState {
         status: LyricsStatus::Ready,
         source: result.source,
+        duration_ms: result.duration_ms,
         lines: result.lines,
         error: None,
     }
@@ -107,6 +138,7 @@ fn error_state(error: LyricsError) -> LyricsState {
         status: LyricsStatus::Error,
         source: LyricsSource::None,
         lines: Vec::new(),
+        duration_ms: 0,
         error: Some(error.to_string()),
     }
 }

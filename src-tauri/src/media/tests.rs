@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use super::*;
 use crate::contracts::{MediaSessionSummary, PlaybackState, PlaybackStatus, SessionCapabilities};
 
@@ -156,6 +158,118 @@ fn identifies_cloudmusic_audio_process_paths() {
     assert!(!is_cloudmusic_executable(
         r"C:\Program Files\Spotify\Spotify.exe"
     ));
+}
+
+#[test]
+fn netease_command_override_tracks_expected_status_for_three_seconds() {
+    let started = Instant::now();
+    let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    runtime.set_command_override(PlaybackStatus::Playing, started);
+
+    assert_eq!(
+        runtime.status_at(
+            started + Duration::from_millis(2_999),
+            PlaybackStatus::Paused
+        ),
+        PlaybackStatus::Playing
+    );
+    assert_eq!(
+        runtime.status_at(started + Duration::from_secs(3), PlaybackStatus::Paused),
+        PlaybackStatus::Paused
+    );
+}
+
+#[test]
+fn netease_track_change_clears_timeline_and_override() {
+    let started = Instant::now();
+    let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    runtime.set_command_override(PlaybackStatus::Playing, started);
+    runtime.set_timeline(1_000, 200_000, started);
+
+    runtime.observe_track("song-b");
+
+    assert!(runtime.timeline().is_none());
+    assert_eq!(
+        runtime.status_at(started + Duration::from_secs(1), PlaybackStatus::Paused),
+        PlaybackStatus::Paused
+    );
+}
+
+#[test]
+fn netease_timeline_advances_only_while_playing() {
+    let captured = Instant::now();
+    let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    runtime.set_timeline(10_000, 200_000, captured);
+
+    assert_eq!(
+        runtime.timeline_at(
+            captured + Duration::from_millis(1_500),
+            PlaybackStatus::Playing
+        ),
+        Some((11_500, 200_000))
+    );
+    assert_eq!(
+        runtime.timeline_at(
+            captured + Duration::from_millis(1_500),
+            PlaybackStatus::Paused
+        ),
+        Some((10_000, 200_000))
+    );
+}
+
+#[test]
+fn parses_netease_progress_text() {
+    assert_eq!(
+        super::netease_timeline::parse_netease_progress_text("01:23 / 04:56"),
+        Some((83_000, 296_000))
+    );
+    assert_eq!(
+        super::netease_timeline::parse_netease_progress_text("1:05/3:20"),
+        Some((65_000, 200_000))
+    );
+    assert_eq!(
+        super::netease_timeline::parse_netease_progress_text("01：23 / 04：56"),
+        Some((83_000, 296_000))
+    );
+    assert_eq!(
+        super::netease_timeline::parse_netease_progress_text("01:23"),
+        None
+    );
+}
+
+#[test]
+fn crops_the_bottom_progress_region() {
+    assert_eq!(
+        super::netease_timeline::netease_progress_crop(1_057, 752),
+        (0, 682, 1_057, 752)
+    );
+}
+
+#[test]
+fn maps_bottom_up_dib_rows_to_visual_rows() {
+    assert_eq!(super::netease_timeline::dib_source_row(752, 682), 69);
+    assert_eq!(super::netease_timeline::dib_source_row(752, 751), 0);
+}
+
+#[test]
+fn isolates_left_and_right_time_labels() {
+    assert_eq!(
+        super::netease_timeline::netease_time_label_crops(1_057, 752),
+        [(0, 692, 180, 752), (877, 692, 1_057, 752),]
+    );
+}
+
+#[test]
+fn enters_estimated_timeline_after_three_consecutive_ocr_failures() {
+    let mut failures = super::netease_timeline::TimelineFailureTracker::new();
+
+    assert!(!failures.record_failure());
+    assert!(!failures.record_failure());
+    assert!(failures.record_failure());
+    failures.record_success();
+    assert!(!failures.record_failure());
+    assert!(!failures.record_failure());
+    assert!(failures.record_failure());
 }
 
 #[tokio::test]

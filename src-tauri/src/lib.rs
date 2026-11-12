@@ -1,3 +1,4 @@
+mod autostart;
 mod commands;
 mod contracts;
 mod lyrics;
@@ -11,12 +12,11 @@ mod tray;
 use std::sync::Arc;
 
 use commands::AppState;
-use lyrics::{LrclibFetcher, LyricsCache, LyricsService};
+use lyrics::{LrclibFetcher, LyricsCache, LyricsService, NeteaseLyricsFetcher};
 use media::{MediaCoordinator, WindowsMediaProvider};
 use quick_bar::InteractionLock;
 use settings::SettingsService;
 use tauri::Manager;
-use tauri_plugin_autostart::ManagerExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -31,11 +31,6 @@ pub fn run() {
             },
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .app_name("Lumi")
-                .build(),
-        )
         .setup(|app| {
             let app_cache_dir = app
                 .path()
@@ -46,7 +41,10 @@ pub fn run() {
             ))));
             let cache_dir = app_cache_dir.join("lyrics");
             let lyrics = Arc::new(LyricsService::new(
-                Arc::new(LrclibFetcher::new().map_err(|error| error.to_string())?),
+                vec![
+                    Arc::new(LrclibFetcher::new().map_err(|error| error.to_string())?),
+                    Arc::new(NeteaseLyricsFetcher::new().map_err(|error| error.to_string())?),
+                ],
                 LyricsCache::new(cache_dir),
             ));
             let interaction = Arc::new(InteractionLock::new());
@@ -70,12 +68,8 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             quick_bar::start_hover_monitor(app.handle().clone(), interaction);
 
-            let _ = shortcuts::rebind(app.handle(), &initial_settings);
-            if initial_settings.start_with_windows {
-                let _ = app.autolaunch().enable();
-            } else {
-                let _ = app.autolaunch().disable();
-            }
+            let _ = shortcuts::rebind(app.handle(), &initial_settings, &initial_settings);
+            let _ = autostart::set_enabled(initial_settings.start_with_windows);
             Ok(())
         })
         .on_window_event(|window, event| {

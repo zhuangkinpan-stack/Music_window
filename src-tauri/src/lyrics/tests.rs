@@ -1,4 +1,11 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use tempfile::tempdir;
@@ -58,6 +65,101 @@ fn selects_synced_candidate_with_closest_duration() {
     assert_eq!(selected.duration_ms, 268_000);
 }
 
+#[test]
+fn selects_containment_match_when_exact_title_has_decorations() {
+    let track = TrackQuery {
+        title: "晴天 (Live)".to_owned(),
+        artist: "周杰伦".to_owned(),
+        album: String::new(),
+        duration_ms: 0,
+    };
+    let live = candidate("晴天", "周杰伦", 270_000);
+
+    let selected = select_candidate(&track, &[live]).unwrap();
+
+    assert_eq!(selected.track_name, "晴天");
+}
+
+#[test]
+fn legacy_lyrics_cache_defaults_duration_to_zero() {
+    let result: LyricsResult =
+        serde_json::from_str(r#"{"source":"automatic","lines":[{"timeMs":1000,"text":"旧缓存"}]}"#)
+            .unwrap();
+
+    assert_eq!(result.duration_ms, 0);
+}
+
+#[tokio::test]
+async fn lyrics_service_tries_fetchers_in_order() {
+    let directory = tempdir().unwrap();
+    let empty = Arc::new(CountingFetcher::new("empty", Vec::new()));
+    let found = Arc::new(CountingFetcher::new(
+        "found",
+        vec![candidate("晴天", "周杰伦", 269_000)],
+    ));
+    let service = LyricsService::new(
+        vec![empty.clone(), found.clone()],
+        LyricsCache::new(directory.path().to_path_buf()),
+    );
+
+    let state = service.load(&track_query(), None).await;
+
+    assert_eq!(state.status, LyricsStatus::Ready);
+    assert_eq!(state.duration_ms, 269_000);
+    assert_eq!(empty.calls(), 1);
+    assert_eq!(found.calls(), 1);
+}
+
+#[tokio::test]
+async fn lyrics_service_times_out_stalled_fetcher_before_fallback() {
+    let directory = tempdir().unwrap();
+    let slow = Arc::new(DelayedFetcher::new(Duration::from_millis(50)));
+    let found = Arc::new(CountingFetcher::new(
+        "found",
+        vec![candidate("晴天", "周杰伦", 269_000)],
+    ));
+    let service = LyricsService::with_timeout(
+        vec![slow, found],
+        LyricsCache::new(directory.path().to_path_buf()),
+        Duration::from_millis(10),
+    );
+
+    let state = service.load(&track_query(), None).await;
+
+    assert_eq!(state.status, LyricsStatus::Ready);
+}
+
+#[test]
+fn builds_anonymous_netease_search_and_lyric_urls() {
+    let search = super::netease::netease_search_url("You Are All I Need", "FLY COAST/二宮愛");
+    let query: BTreeMap<_, _> = search.query_pairs().into_owned().collect();
+    assert_eq!(
+        query.get("s").map(String::as_str),
+        Some("You Are All I Need FLY COAST/二宮愛")
+    );
+    assert_eq!(query.get("type").map(String::as_str), Some("1"));
+
+    let lyric = super::netease::netease_lyric_url("12345");
+    assert_eq!(lyric.path(), "/api/song/lyric");
+    assert_eq!(lyric.query(), Some("id=12345&lv=-1&kv=-1&tv=-1"));
+}
+
+#[test]
+fn selects_best_netease_search_result() {
+    let response: super::netease::NeteaseSearchResponse = serde_json::from_str(
+        r#"{"result":{"songs":[
+          {"id":1,"name":"晴天 (Live)","duration":271000,"artists":[{"name":"周杰伦"}],"album":{"name":"演唱会"}},
+          {"id":2,"name":"晴天","duration":269000,"artists":[{"name":"周杰伦"}],"album":{"name":"叶惠美"}}
+        ]}}"#,
+    )
+    .unwrap();
+
+    let selected = super::netease::select_netease_song(&track_query(), &response).unwrap();
+
+    assert_eq!(selected.id, 2);
+    assert_eq!(selected.duration, 269_000);
+}
+
 #[tokio::test]
 async fn offline_load_uses_cached_automatic_lyrics() {
     let directory = tempdir().unwrap();
@@ -67,6 +169,7 @@ async fn offline_load_uses_cached_automatic_lyrics() {
             &track_query(),
             &LyricsResult {
                 source: crate::contracts::LyricsSource::Automatic,
+                duration_ms: 269_000,
                 lines: vec![LyricLine {
                     time_ms: 1_000,
                     text: "缓存歌词".to_owned(),
@@ -74,7 +177,7 @@ async fn offline_load_uses_cached_automatic_lyrics() {
             },
         )
         .unwrap();
-    let service = LyricsService::new(Arc::new(FailingFetcher), cache);
+    let service = LyricsService::new(vec![Arc::new(FailingFetcher)], cache);
 
     let state = service.load(&track_query(), None).await;
 
@@ -87,7 +190,7 @@ async fn stale_request_does_not_publish_old_result() {
     let directory = tempdir().unwrap();
     let cache = LyricsCache::new(directory.path().to_path_buf());
     let fetcher = Arc::new(DelayedFetcher::new(Duration::from_millis(50)));
-    let service = LyricsService::new(fetcher, cache);
+    let service = LyricsService::new(vec![fetcher], cache);
     let first_token = service.begin_request();
     let _second_token = service.begin_request();
 
@@ -114,6 +217,32 @@ fn candidate(title: &str, artist: &str, duration_ms: i64) -> LyricsCandidate {
 }
 
 struct FailingFetcher;
+
+struct CountingFetcher {
+    calls: AtomicUsize,
+    candidates: Vec<LyricsCandidate>,
+}
+
+impl CountingFetcher {
+    fn new(_name: &str, candidates: Vec<LyricsCandidate>) -> Self {
+        Self {
+            calls: AtomicUsize::new(0),
+            candidates,
+        }
+    }
+
+    fn calls(&self) -> usize {
+        self.calls.load(Ordering::SeqCst)
+    }
+}
+
+#[async_trait]
+impl LyricsFetcher for CountingFetcher {
+    async fn lookup(&self, _track: &TrackQuery) -> Result<Vec<LyricsCandidate>, LyricsError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self.candidates.clone())
+    }
+}
 
 #[async_trait]
 impl LyricsFetcher for FailingFetcher {

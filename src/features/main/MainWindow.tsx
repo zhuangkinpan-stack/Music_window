@@ -16,6 +16,7 @@ import { SessionSwitcher } from "../sessions/SessionSwitcher";
 interface MainWindowProps {
   state: AppState;
   positionMs?: number;
+  lyricOffsetMs?: number;
   onSelectSession: (sessionId: string) => void;
   onPlayPause: () => void;
   onNext: () => void;
@@ -30,6 +31,7 @@ interface MainWindowProps {
 export function MainWindow({
   state,
   positionMs = state.playback?.positionMs ?? 0,
+  lyricOffsetMs = 0,
   onSelectSession,
   onPlayPause,
   onNext,
@@ -95,6 +97,7 @@ export function MainWindow({
           session={session}
           state={state}
           positionMs={positionMs}
+          lyricOffsetMs={lyricOffsetMs}
           onPlayPause={onPlayPause}
           onNext={onNext}
           onPrevious={onPrevious}
@@ -112,6 +115,7 @@ interface NowPlayingProps {
   session: MediaSessionSummary;
   state: AppState;
   positionMs: number;
+  lyricOffsetMs: number;
   onPlayPause: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -123,6 +127,7 @@ function NowPlaying({
   session,
   state,
   positionMs,
+  lyricOffsetMs,
   onPlayPause,
   onNext,
   onPrevious,
@@ -130,9 +135,11 @@ function NowPlaying({
   onImportLyrics,
 }: NowPlayingProps) {
   const playback = state.playback!;
+  const effectiveDuration =
+    playback.durationMs > 0 ? playback.durationMs : state.lyrics.durationMs;
   const progress =
-    playback.durationMs > 0
-      ? Math.min(100, (positionMs / playback.durationMs) * 100)
+    effectiveDuration > 0
+      ? Math.min(100, (positionMs / effectiveDuration) * 100)
       : 0;
 
   return (
@@ -152,6 +159,7 @@ function NowPlaying({
       <LyricsPane
         lyrics={state.lyrics}
         positionMs={positionMs}
+        offsetMs={lyricOffsetMs}
         onRetry={onRetryLyrics}
         onImport={onImportLyrics}
       />
@@ -164,15 +172,15 @@ function NowPlaying({
             role="progressbar"
             aria-label="播放进度"
             aria-valuemin={0}
-            aria-valuemax={playback.durationMs}
-            aria-valuenow={Math.min(positionMs, playback.durationMs)}
+            aria-valuemax={effectiveDuration}
+            aria-valuenow={Math.min(positionMs, effectiveDuration)}
           >
             <span style={{ width: `${progress}%` }} />
           </div>
-          <span>{formatTime(playback.durationMs)}</span>
+          <span>{formatTime(effectiveDuration)}</span>
         </div>
         <PlaybackControls
-          playing={session.playbackStatus === "playing"}
+          playing={playback.playbackStatus === "playing"}
           capabilities={session.capabilities}
           onPlayPause={onPlayPause}
           onNext={onNext}

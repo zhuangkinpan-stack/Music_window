@@ -83,6 +83,7 @@ impl MediaSessionProvider for MockMediaProvider {
             playback_status: session.playback_status,
             position_ms: 0,
             duration_ms: 0,
+            timeline_estimated: false,
         })
     }
 

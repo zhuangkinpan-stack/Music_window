@@ -29,12 +29,14 @@ const playback: PlaybackState = {
   playbackStatus: "playing",
   positionMs: 4_500,
   durationMs: 269_000,
+  timelineEstimated: false,
 };
 
 const lyrics: LyricsState = {
   status: "ready",
   source: "automatic",
   error: null,
+  durationMs: 269_000,
   lines: [
     { timeMs: 1_000, text: "故事的小黄花" },
     { timeMs: 4_000, text: "从出生那年就飘着" },

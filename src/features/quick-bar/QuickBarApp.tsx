@@ -28,6 +28,7 @@ const loadingLyrics: LyricsState = {
   status: "loading",
   source: "none",
   lines: [],
+  durationMs: 0,
   error: null,
 };
 
@@ -42,9 +43,17 @@ export function QuickBarApp() {
   } = useAppStore();
   const interaction = useInteractionLock();
   const [hovered, setHovered] = useState(false);
+  const [lyricOffsetMs, setLyricOffsetMs] = useState(0);
   const lastTouchRef = useRef(0);
-  const positionMs = usePlaybackPosition(playback);
   const session = sessions.find((item) => item.id === selectedSessionId);
+  const trackKey = session
+    ? `${session.id}|${session.title}|${session.artist}|${session.album}`
+    : "";
+  const positionMs = usePlaybackPosition(
+    playback,
+    trackKey,
+    lyrics.durationMs,
+  );
 
   useEffect(() => {
     document.body.classList.add("quick-window");
@@ -61,6 +70,7 @@ export function QuickBarApp() {
         document.documentElement.dataset.reduceTransparency = String(
           settings.reduceTransparency,
         );
+        setLyricOffsetMs(settings.lyricOffsetMs);
       })
       .catch(() => undefined);
     let active = true;
@@ -70,6 +80,7 @@ export function QuickBarApp() {
       document.documentElement.dataset.reduceTransparency = String(
         settings.reduceTransparency,
       );
+      setLyricOffsetMs(settings.lyricOffsetMs);
     }).then((unlisten) => {
       if (active) {
         cleanup = unlisten;
@@ -200,6 +211,7 @@ export function QuickBarApp() {
             status: "error",
             source: "none",
             lines: [],
+            durationMs: 0,
             error: String(error),
           });
         }
@@ -259,6 +271,7 @@ export function QuickBarApp() {
       playback={playback}
       lyrics={lyrics}
       positionMs={positionMs}
+      offsetMs={lyricOffsetMs}
       locked={interaction.locked}
       hovered={hovered}
       onInteract={interact}

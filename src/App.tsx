@@ -29,6 +29,7 @@ const loadingLyrics: LyricsState = {
   status: "loading",
   source: "none",
   lines: [],
+  durationMs: 0,
   error: null,
 };
 
@@ -47,10 +48,18 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(defaultAppSettings);
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const positionMs = usePlaybackPosition(playback);
   const selectedSession = sessions.find(
     (session) => session.id === selectedSessionId,
+  );
+  const trackKey = selectedSession
+    ? `${selectedSession.id}|${selectedSession.title}|${selectedSession.artist}|${selectedSession.album}`
+    : "";
+  const positionMs = usePlaybackPosition(
+    playback,
+    trackKey,
+    lyrics.durationMs,
   );
 
   useEffect(() => {
@@ -70,6 +79,7 @@ export default function App() {
       .then((loaded) => {
         if (active) {
           setSettings(loaded);
+          setSettingsError(null);
           setSettingsHydrated(true);
         }
       })
@@ -88,13 +98,16 @@ export default function App() {
       return;
     }
     const timeout = window.setTimeout(() => {
-      void updateSettings(settings).catch((error) =>
+      void updateSettings(settings).catch((error) => {
+        const message = String(error);
+        setSettingsError(message);
         setDiagnostic({
           code: "settings_failed",
-          message: `无法保存设置：${String(error)}`,
+          message: `无法保存设置：${message}`,
           recoverable: true,
-        }),
-      );
+        });
+        void getSettings().then(setSettings).catch(() => undefined);
+      });
     }, 250);
     return () => window.clearTimeout(timeout);
   }, [settings, settingsHydrated, setDiagnostic]);
@@ -161,6 +174,7 @@ export default function App() {
         status: "error",
         source: "none",
         lines: [],
+        durationMs: 0,
         error: String(error),
       });
     }
@@ -184,6 +198,7 @@ export default function App() {
             status: "error",
             source: "none",
             lines: [],
+            durationMs: 0,
             error: String(error),
           });
         }
@@ -248,6 +263,7 @@ export default function App() {
           lyrics,
         }}
         positionMs={positionMs}
+        lyricOffsetMs={settings.lyricOffsetMs}
         onSelectSession={handleSelectSession}
         onPlayPause={() => void runCommand(togglePlayPause)}
         onNext={() => void runCommand(nextTrack)}
@@ -261,8 +277,12 @@ export default function App() {
       <SettingsPanel
         open={settingsOpen}
         settings={settings}
+        shortcutError={settingsError}
         onOpenChange={setSettingsOpen}
-        onChange={setSettings}
+        onChange={(next) => {
+          setSettingsError(null);
+          setSettings(next);
+        }}
       />
       <input
         ref={fileInputRef}

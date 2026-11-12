@@ -6,6 +6,7 @@ import type { LyricsState } from "../../contracts";
 interface LyricsPaneProps {
   lyrics: LyricsState;
   positionMs: number;
+  offsetMs?: number;
   onRetry?: () => void;
   onImport?: () => void;
 }
@@ -13,13 +14,14 @@ interface LyricsPaneProps {
 export function LyricsPane({
   lyrics,
   positionMs,
+  offsetMs = 0,
   onRetry,
   onImport,
 }: LyricsPaneProps) {
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
   const currentIndex =
     lyrics.status === "ready"
-      ? findCurrentLyricIndex(lyrics.lines, positionMs)
+      ? findCurrentLyricIndex(lyrics.lines, Math.max(0, positionMs + offsetMs))
       : -1;
 
   useEffect(() => {

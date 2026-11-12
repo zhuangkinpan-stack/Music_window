@@ -96,3 +96,26 @@ fn settings_update_preserves_position_saved_by_quick_bar() {
         Some((300, 850))
     );
 }
+
+#[test]
+fn defaults_toggle_shortcut_to_ctrl_alt_q() {
+    assert_eq!(
+        AppSettings::default().toggle_quick_bar_shortcut,
+        "Ctrl+Alt+Q"
+    );
+}
+
+#[test]
+fn migrates_legacy_default_toggle_shortcut() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("settings.json");
+    fs::write(
+        &path,
+        r#"{"unlockShortcut":"Ctrl+Alt+L","toggleQuickBarShortcut":"Ctrl+Alt+M"}"#,
+    )
+    .unwrap();
+
+    let service = SettingsService::load(path).unwrap();
+
+    assert_eq!(service.get().toggle_quick_bar_shortcut, "Ctrl+Alt+Q");
+}

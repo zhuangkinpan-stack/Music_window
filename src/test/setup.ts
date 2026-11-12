@@ -4,6 +4,14 @@ import { afterEach } from "vitest";
 
 Element.prototype.scrollIntoView = () => undefined;
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+globalThis.ResizeObserver = ResizeObserverStub;
+
 afterEach(() => {
   cleanup();
 });

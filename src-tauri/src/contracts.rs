@@ -41,6 +41,8 @@ pub struct PlaybackState {
     pub playback_status: PlaybackStatus,
     pub position_ms: i64,
     pub duration_ms: i64,
+    #[serde(default)]
+    pub timeline_estimated: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -94,6 +96,8 @@ pub struct LyricsState {
     pub status: LyricsStatus,
     pub source: LyricsSource,
     pub lines: Vec<LyricLine>,
+    #[serde(default)]
+    pub duration_ms: i64,
     pub error: Option<String>,
 }
 
@@ -116,6 +120,7 @@ pub struct AppSettings {
     pub reduce_transparency: bool,
     pub unlock_shortcut: String,
     pub toggle_quick_bar_shortcut: String,
+    pub lyric_offset_ms: i64,
 }
 
 impl Default for AppSettings {
@@ -128,7 +133,8 @@ impl Default for AppSettings {
             start_with_windows: false,
             reduce_transparency: false,
             unlock_shortcut: "Ctrl+Alt+L".to_owned(),
-            toggle_quick_bar_shortcut: "Ctrl+Alt+M".to_owned(),
+            toggle_quick_bar_shortcut: "Ctrl+Alt+Q".to_owned(),
+            lyric_offset_ms: 0,
         }
     }
 }

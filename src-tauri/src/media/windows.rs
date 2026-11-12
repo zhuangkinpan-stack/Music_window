@@ -217,6 +217,7 @@ impl MediaSessionProvider for WindowsMediaProvider {
             playback_status: map_playback_status(playback.PlaybackStatus()?),
             position_ms: ticks_to_millis(position.saturating_sub(start)),
             duration_ms: ticks_to_millis(end.saturating_sub(start)),
+            timeline_estimated: false,
         })
     }
 

@@ -29,6 +29,7 @@ export interface PlaybackState {
   playbackStatus: PlaybackStatus;
   positionMs: number;
   durationMs: number;
+  timelineEstimated: boolean;
 }
 
 export interface MediaDiagnostic {
@@ -56,6 +57,7 @@ export interface LyricsState {
   status: "idle" | "loading" | "ready" | "notFound" | "error";
   source: LyricsSource;
   lines: LyricLine[];
+  durationMs: number;
   error: string | null;
 }
 
@@ -74,6 +76,7 @@ export interface AppSettings {
   reduceTransparency: boolean;
   unlockShortcut: string;
   toggleQuickBarShortcut: string;
+  lyricOffsetMs: number;
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -84,7 +87,8 @@ export const defaultAppSettings: AppSettings = {
   startWithWindows: false,
   reduceTransparency: false,
   unlockShortcut: "Ctrl+Alt+L",
-  toggleQuickBarShortcut: "Ctrl+Alt+M",
+  toggleQuickBarShortcut: "Ctrl+Alt+Q",
+  lyricOffsetMs: 0,
 };
 
 export interface AppState {

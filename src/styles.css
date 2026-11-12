@@ -731,6 +731,13 @@ kbd {
   border-color: var(--focus);
 }
 
+.settings-error {
+  margin: 2px 0 0;
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

@@ -70,6 +70,7 @@ const playback: PlaybackState = {
   playbackStatus: "playing",
   positionMs: 0,
   durationMs: 0,
+  timelineEstimated: false,
 };
 
 const snapshot: MediaSnapshot = {
