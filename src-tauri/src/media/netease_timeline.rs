@@ -1,4 +1,8 @@
-use std::{mem::size_of, sync::OnceLock};
+use std::{
+    mem::size_of,
+    sync::OnceLock,
+    time::{Duration, Instant},
+};
 
 use ::windows::{
     core::HSTRING,
@@ -258,30 +262,53 @@ fn progress_pattern() -> &'static Regex {
 pub(crate) struct TimelineFailureTracker {
     failures: u8,
     estimated: bool,
+    retry_at: Option<Instant>,
 }
+
+const FAILURES_BEFORE_ESTIMATE: u8 = 3;
+/// 退化为墙钟估算后仍周期性重试 OCR，命中一次就能把进度校正回来。
+const RETRY_INTERVAL: Duration = Duration::from_secs(20);
 
 impl TimelineFailureTracker {
     pub(crate) fn new() -> Self {
         Self {
             failures: 0,
             estimated: false,
+            retry_at: None,
         }
     }
 
-    pub(crate) fn record_failure(&mut self) -> bool {
-        self.failures = self.failures.saturating_add(1);
-        if self.failures >= 3 && !self.estimated {
-            self.estimated = true;
+    /// 是否该发起一次采样：正常状态每次都采，估算状态按重试间隔采。
+    pub(crate) fn should_attempt(&mut self, now: Instant) -> bool {
+        if !self.estimated {
             return true;
         }
-        false
+        if self.retry_at.is_some_and(|at| now < at) {
+            return false;
+        }
+        self.retry_at = None;
+        true
+    }
+
+    pub(crate) fn record_failure(&mut self, now: Instant) -> bool {
+        self.failures = self.failures.saturating_add(1);
+        let just_estimated = !self.estimated && self.failures >= FAILURES_BEFORE_ESTIMATE;
+        if just_estimated {
+            self.estimated = true;
+        }
+        if self.estimated {
+            self.retry_at = Some(now + RETRY_INTERVAL);
+        }
+        just_estimated
     }
 
     pub(crate) fn record_success(&mut self) {
         self.failures = 0;
         self.estimated = false;
+        self.retry_at = None;
     }
 
+    #[cfg(test)]
     pub(crate) fn is_estimated(&self) -> bool {
         self.estimated
     }

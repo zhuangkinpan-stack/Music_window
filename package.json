@@ -1,14 +1,16 @@
 {
   "name": "lumi",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "package:installer": "tauri build && node scripts/collect-artifact.mjs",
+    "package:installer:offline": "tauri build --config src-tauri/tauri.offline.conf.json && node scripts/collect-artifact.mjs --offline"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

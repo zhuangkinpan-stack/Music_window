@@ -6,6 +6,7 @@ mod media;
 mod media_events;
 mod quick_bar;
 mod settings;
+mod shortcut;
 mod shortcuts;
 mod tray;
 
@@ -59,6 +60,7 @@ pub fn run() {
             app.manage(AppState::new(media, lyrics, interaction.clone(), settings));
             media_events::start(app.handle().clone());
             tray::build(app)?;
+            let _ = shortcut::repair_desktop_shortcut(shortcut::SHORTCUT_NAME);
 
             if let Some(main_window) = app.get_webview_window("main") {
                 let _ = window_vibrancy::apply_mica(&main_window, Some(true));

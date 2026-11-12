@@ -20,7 +20,7 @@ pub struct LyricsService {
 
 impl LyricsService {
     pub fn new(fetchers: Vec<Arc<dyn LyricsFetcher>>, cache: LyricsCache) -> Self {
-        Self::with_timeout(fetchers, cache, Duration::from_secs(4))
+        Self::with_timeout(fetchers, cache, Duration::from_secs(8))
     }
 
     pub fn with_timeout(
@@ -42,6 +42,11 @@ impl LyricsService {
 
     pub fn is_current(&self, token: u64) -> bool {
         self.generation.load(Ordering::Acquire) == token
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fetcher_timeout_for_test(&self) -> Duration {
+        self.fetcher_timeout
     }
 
     pub async fn load(&self, track: &TrackQuery, manual_lrc: Option<&str>) -> LyricsState {

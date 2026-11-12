@@ -44,62 +44,83 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<MediaSnapshot, 
 #[tauri::command]
 pub async fn select_session(
     session_id: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MediaSnapshot, String> {
-    state
+    let snapshot = state
         .media
         .select_session(&session_id)
         .await
-        .map_err(error_message)
+        .map_err(error_message)?;
+    broadcast(&app, &snapshot);
+    Ok(snapshot)
 }
 
 #[tauri::command]
 pub async fn toggle_play_pause(
     session_id: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MediaSnapshot, String> {
-    state
+    let snapshot = state
         .media
         .toggle_play_pause(&session_id)
         .await
-        .map_err(error_message)
+        .map_err(error_message)?;
+    broadcast(&app, &snapshot);
+    Ok(snapshot)
 }
 
 #[tauri::command]
 pub async fn next_track(
     session_id: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MediaSnapshot, String> {
-    state
+    let snapshot = state
         .media
         .next_track(&session_id)
         .await
-        .map_err(error_message)
+        .map_err(error_message)?;
+    broadcast(&app, &snapshot);
+    Ok(snapshot)
 }
 
 #[tauri::command]
 pub async fn previous_track(
     session_id: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MediaSnapshot, String> {
-    state
+    let snapshot = state
         .media
         .previous_track(&session_id)
         .await
-        .map_err(error_message)
+        .map_err(error_message)?;
+    broadcast(&app, &snapshot);
+    Ok(snapshot)
 }
 
 #[tauri::command]
 pub async fn seek(
     session_id: String,
     position_ms: i64,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MediaSnapshot, String> {
-    state
+    let snapshot = state
         .media
         .seek(&session_id, position_ms)
         .await
-        .map_err(error_message)
+        .map_err(error_message)?;
+    broadcast(&app, &snapshot);
+    Ok(snapshot)
+}
+
+/// 播放控制由任一窗口触发时，立刻把结果推给所有窗口，
+/// 避免另一个窗口只能等下一次轮询、出现按钮状态错位。
+fn broadcast(app: &AppHandle, snapshot: &MediaSnapshot) {
+    let _ = app.emit("media://snapshot", snapshot);
 }
 
 #[tauri::command]

@@ -89,6 +89,14 @@ fn legacy_lyrics_cache_defaults_duration_to_zero() {
     assert_eq!(result.duration_ms, 0);
 }
 
+#[test]
+fn default_lyrics_timeout_allows_eight_seconds_per_source() {
+    let directory = tempdir().unwrap();
+    let service = LyricsService::new(Vec::new(), LyricsCache::new(directory.path().to_path_buf()));
+
+    assert_eq!(service.fetcher_timeout_for_test(), Duration::from_secs(8));
+}
+
 #[tokio::test]
 async fn lyrics_service_tries_fetchers_in_order() {
     let directory = tempdir().unwrap();

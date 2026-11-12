@@ -161,21 +161,51 @@ fn identifies_cloudmusic_audio_process_paths() {
 }
 
 #[test]
-fn netease_command_override_tracks_expected_status_for_three_seconds() {
+fn netease_command_override_survives_until_observation_confirms() {
     let started = Instant::now();
     let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    runtime.observe_track("song-a", started, PlaybackStatus::Paused);
     runtime.set_command_override(PlaybackStatus::Playing, started);
 
+    // 音频会话还没跟上（仍报告暂停），按钮保持用户刚触发的状态
     assert_eq!(
         runtime.status_at(
-            started + Duration::from_millis(2_999),
+            started + Duration::from_millis(5_000),
             PlaybackStatus::Paused
         ),
         PlaybackStatus::Playing
     );
+    // 观测确认后立即交回真实状态，并由 override 退出
     assert_eq!(
-        runtime.status_at(started + Duration::from_secs(3), PlaybackStatus::Paused),
+        runtime.status_at(
+            started + Duration::from_millis(5_500),
+            PlaybackStatus::Playing
+        ),
+        PlaybackStatus::Playing
+    );
+    assert_eq!(
+        runtime.status_at(
+            started + Duration::from_millis(6_000),
+            PlaybackStatus::Paused
+        ),
         PlaybackStatus::Paused
+    );
+}
+
+#[test]
+fn netease_command_override_expires_when_player_never_follows() {
+    let started = Instant::now();
+    let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    runtime.observe_track("song-a", started, PlaybackStatus::Playing);
+    runtime.set_command_override(PlaybackStatus::Paused, started);
+
+    assert_eq!(
+        runtime.status_at(started + Duration::from_secs(7), PlaybackStatus::Playing),
+        PlaybackStatus::Paused
+    );
+    assert_eq!(
+        runtime.status_at(started + Duration::from_secs(9), PlaybackStatus::Playing),
+        PlaybackStatus::Playing
     );
 }
 
@@ -183,12 +213,17 @@ fn netease_command_override_tracks_expected_status_for_three_seconds() {
 fn netease_track_change_clears_timeline_and_override() {
     let started = Instant::now();
     let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    runtime.observe_track("song-a", started, PlaybackStatus::Playing);
     runtime.set_command_override(PlaybackStatus::Playing, started);
     runtime.set_timeline(1_000, 200_000, started);
 
-    runtime.observe_track("song-b");
+    assert!(runtime.observe_track(
+        "song-b",
+        started + Duration::from_secs(1),
+        PlaybackStatus::Paused
+    ));
 
-    assert!(runtime.timeline().is_none());
+    assert_eq!(runtime.timeline(), Some((0, 0)));
     assert_eq!(
         runtime.status_at(started + Duration::from_secs(1), PlaybackStatus::Paused),
         PlaybackStatus::Paused
@@ -196,24 +231,54 @@ fn netease_track_change_clears_timeline_and_override() {
 }
 
 #[test]
-fn netease_timeline_advances_only_while_playing() {
+fn netease_timeline_freezes_at_live_position_on_pause() {
     let captured = Instant::now();
-    let mut runtime = NeteaseRuntimeState::new("song-a".to_owned());
+    let mut runtime = NeteaseRuntimeState::new(String::new());
+    runtime.observe_track("song-a", captured, PlaybackStatus::Playing);
     runtime.set_timeline(10_000, 200_000, captured);
 
+    let paused_at = captured + Duration::from_millis(1_500);
+    runtime.sync_status(PlaybackStatus::Paused, paused_at);
+
+    // 暂停后停在暂停那一刻的真实位置，而不是上次采样或 0
     assert_eq!(
-        runtime.timeline_at(
-            captured + Duration::from_millis(1_500),
-            PlaybackStatus::Playing
-        ),
-        Some((11_500, 200_000))
+        runtime.timeline_at(paused_at + Duration::from_secs(30)),
+        (11_500, 200_000)
     );
+}
+
+#[test]
+fn netease_timeline_resumes_from_frozen_position() {
+    let captured = Instant::now();
+    let mut runtime = NeteaseRuntimeState::new(String::new());
+    runtime.observe_track("song-a", captured, PlaybackStatus::Playing);
+    runtime.set_timeline(10_000, 200_000, captured);
+
+    runtime.sync_status(PlaybackStatus::Paused, captured + Duration::from_secs(2));
+    runtime.sync_status(PlaybackStatus::Playing, captured + Duration::from_secs(30));
+
     assert_eq!(
-        runtime.timeline_at(
-            captured + Duration::from_millis(1_500),
-            PlaybackStatus::Paused
-        ),
-        Some((10_000, 200_000))
+        runtime.timeline_at(captured + Duration::from_secs(31)),
+        (13_000, 200_000)
+    );
+}
+
+#[test]
+fn netease_timeline_keeps_wall_clock_position_without_ocr() {
+    let started = Instant::now();
+    let mut runtime = NeteaseRuntimeState::new(String::new());
+    runtime.observe_track("song-a", started, PlaybackStatus::Playing);
+
+    assert!(runtime.timeline_estimated());
+    assert_eq!(
+        runtime.timeline_at(started + Duration::from_secs(12)),
+        (12_000, 0)
+    );
+
+    runtime.sync_status(PlaybackStatus::Paused, started + Duration::from_secs(12));
+    assert_eq!(
+        runtime.timeline_at(started + Duration::from_secs(60)),
+        (12_000, 0)
     );
 }
 
@@ -261,15 +326,21 @@ fn isolates_left_and_right_time_labels() {
 
 #[test]
 fn enters_estimated_timeline_after_three_consecutive_ocr_failures() {
+    let start = Instant::now();
     let mut failures = super::netease_timeline::TimelineFailureTracker::new();
 
-    assert!(!failures.record_failure());
-    assert!(!failures.record_failure());
-    assert!(failures.record_failure());
+    assert!(!failures.record_failure(start));
+    assert!(!failures.record_failure(start));
+    assert!(failures.record_failure(start));
+    assert!(failures.is_estimated());
+    // 估算期间按间隔重试，而不是永久放弃采样
+    assert!(!failures.should_attempt(start));
+    assert!(failures.should_attempt(start + Duration::from_secs(21)));
     failures.record_success();
-    assert!(!failures.record_failure());
-    assert!(!failures.record_failure());
-    assert!(failures.record_failure());
+    assert!(failures.should_attempt(start + Duration::from_secs(22)));
+    assert!(!failures.record_failure(start + Duration::from_secs(22)));
+    assert!(!failures.record_failure(start + Duration::from_secs(22)));
+    assert!(failures.record_failure(start + Duration::from_secs(22)));
 }
 
 #[tokio::test]
@@ -316,4 +387,79 @@ fn mock_session(app_id: &str, capabilities: SessionCapabilities) -> MediaSession
         playback_status: PlaybackStatus::Playing,
         capabilities,
     }
+}
+
+/// 需要本机正在运行网易云音乐，手动执行：
+/// `cargo test --lib netease_live_probe -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn netease_live_probe() {
+    let client = super::netease::NeteaseClient::new();
+    for round in 0..40 {
+        let session = client.session();
+        let state = client.playback_state(super::netease::NET_EASE_SESSION_ID);
+        match (session, state) {
+            (Some(session), Ok(state)) => println!(
+                "#{round} {} - {} | {:?} {}ms/{}ms estimated={}",
+                session.title,
+                session.artist,
+                state.playback_status,
+                state.position_ms,
+                state.duration_ms,
+                state.timeline_estimated
+            ),
+            (None, _) => println!("#{round} no netease session"),
+            (_, Err(error)) => println!("#{round} error: {error}"),
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+/// 端到端验证暂停/恢复时钟：需要本机正在运行网易云音乐。
+/// `cargo test --lib netease_live_pause_cycle -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn netease_live_pause_cycle() {
+    let client = super::netease::NeteaseClient::new();
+    let id = super::netease::NET_EASE_SESSION_ID;
+    let session = client.session().expect("netease session");
+    println!("track: {} - {}", session.title, session.artist);
+
+    if session.playback_status != PlaybackStatus::Playing {
+        println!(
+            "start playback: {}",
+            client
+                .send_command(id, APPCOMMAND_MEDIA_PLAY_PAUSE)
+                .unwrap()
+        );
+    }
+    for round in 0..12 {
+        let state = client.playback_state(id).unwrap();
+        println!(
+            "play #{round} {:?} {}ms/{}ms estimated={}",
+            state.playback_status, state.position_ms, state.duration_ms, state.timeline_estimated
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    println!(
+        "pause: {}",
+        client
+            .send_command(id, APPCOMMAND_MEDIA_PLAY_PAUSE)
+            .unwrap()
+    );
+    let mut paused_positions = Vec::new();
+    for round in 0..6 {
+        let state = client.playback_state(id).unwrap();
+        println!(
+            "paused #{round} {:?} {}ms",
+            state.playback_status, state.position_ms
+        );
+        paused_positions.push(state.position_ms);
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    let first = paused_positions.first().copied().unwrap_or(0);
+    let last = paused_positions.last().copied().unwrap_or(0);
+    assert_eq!(first, last, "暂停后位置必须冻结不漂移");
 }
