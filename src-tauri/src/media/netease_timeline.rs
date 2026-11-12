@@ -17,10 +17,7 @@ use ::windows::{
             BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
         },
         Storage::Xps::{PrintWindow, PRINT_WINDOW_FLAGS},
-        UI::WindowsAndMessaging::{
-            GetWindowRect, IsIconic, IsWindowVisible, ShowWindow, PW_RENDERFULLCONTENT, SW_HIDE,
-            SW_MINIMIZE, SW_SHOWNOACTIVATE,
-        },
+        UI::WindowsAndMessaging::{GetWindowRect, PW_RENDERFULLCONTENT},
     },
 };
 use regex::Regex;
@@ -67,23 +64,7 @@ pub(crate) fn dib_source_row(height: i32, visual_row: i32) -> i32 {
 }
 
 pub(crate) fn capture_netease_timeline(hwnd: HWND) -> Option<(i64, i64)> {
-    unsafe {
-        let was_visible = IsWindowVisible(hwnd).as_bool();
-        let was_iconic = IsIconic(hwnd).as_bool();
-        if !was_visible || was_iconic {
-            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-            std::thread::sleep(std::time::Duration::from_millis(120));
-        }
-
-        let result = capture_and_recognize(hwnd);
-
-        if was_iconic {
-            let _ = ShowWindow(hwnd, SW_MINIMIZE);
-        } else if !was_visible {
-            let _ = ShowWindow(hwnd, SW_HIDE);
-        }
-        result
-    }
+    unsafe { capture_and_recognize(hwnd) }
 }
 
 unsafe fn capture_and_recognize(hwnd: HWND) -> Option<(i64, i64)> {
@@ -311,5 +292,80 @@ impl TimelineFailureTracker {
     #[cfg(test)]
     pub(crate) fn is_estimated(&self) -> bool {
         self.estimated
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
+
+    use ::windows::{
+        core::w,
+        Win32::{
+            Foundation::HWND,
+            UI::WindowsAndMessaging::{
+                CreateWindowExW, DestroyWindow, IsWindowVisible, WINDOW_EX_STYLE, WS_EX_NOACTIVATE,
+                WS_EX_TOOLWINDOW, WS_POPUP,
+            },
+        },
+    };
+
+    use super::capture_netease_timeline;
+
+    #[test]
+    fn timeline_capture_never_reveals_a_hidden_window() {
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0),
+                w!("STATIC"),
+                w!("Lumi timeline regression"),
+                WS_POPUP,
+                0,
+                0,
+                1,
+                1,
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+        .expect("create hidden timeline test window");
+        assert!(!unsafe { IsWindowVisible(hwnd).as_bool() });
+
+        let raw_hwnd = hwnd.0 as usize;
+        let stop = Arc::new(AtomicBool::new(false));
+        let visible_seen = Arc::new(AtomicBool::new(false));
+        let sampler = {
+            let stop = stop.clone();
+            let visible_seen = visible_seen.clone();
+            std::thread::spawn(move || {
+                let hwnd = HWND(raw_hwnd as *mut _);
+                while !stop.load(Ordering::Acquire) {
+                    if unsafe { IsWindowVisible(hwnd).as_bool() } {
+                        visible_seen.store(true, Ordering::Release);
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            })
+        };
+
+        let _ = capture_netease_timeline(hwnd);
+        stop.store(true, Ordering::Release);
+        sampler.join().unwrap();
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
+
+        assert!(
+            !visible_seen.load(Ordering::Acquire),
+            "timeline capture must not reveal the player window"
+        );
     }
 }
